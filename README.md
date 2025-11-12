@@ -2,7 +2,7 @@
 
 A powerful Chrome extension that provides a visual tab switcher with thumbnail previews, similar to Windows Alt+Tab or macOS Mission Control. Navigate through your open tabs with ease using keyboard shortcuts, mouse clicks, or arrow keys.
 
-![Extension Preview](https://via.placeholder.com/800x450/1e1e1e/007acc?text=Visual+Tab+Switcher+Preview)
+![Extension Preview](./preview.png)
 
 ## ✨ Features
 
