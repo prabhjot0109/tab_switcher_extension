@@ -1,0 +1,38 @@
+{
+  "manifest_version": 3,
+  "name": "Visual Tab Switcher",
+  "description": "Displays a grid of thumbnail previews to quickly switch between tabs.",
+  "version": "0.1.0",
+  "action": {
+    "default_title": "Visual Tab Switcher"
+  },
+  "permissions": [
+    "tabs",
+    "activeTab",
+    "tabCapture",
+    "storage",
+    "scripting"
+  ],
+  "host_permissions": [
+    "<all_urls>"
+  ],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "content_scripts": [
+    {
+      "matches": ["<all_urls>"],
+      "js": ["contentScript.js"],
+      "run_at": "document_idle"
+    }
+  ],
+  "commands": {
+    "tab-switcher-toggle": {
+      "suggested_key": {
+        "default": "Ctrl+Shift+Space",
+        "mac": "Command+Shift+Space"
+      },
+      "description": "Open the visual tab switcher overlay"
+    }
+  }
+}
