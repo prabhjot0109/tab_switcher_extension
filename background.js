@@ -1,148 +1,411 @@
 // Background service worker for Visual Tab Switcher
-let tabScreenshots = new Map(); // Cache for tab screenshots
-let recentTabOrder = []; // Track recently used tabs
-let screenshotTimestamps = new Map(); // Track when screenshots were taken
-const SCREENSHOT_CACHE_DURATION = 300000; // 5 minutes (longer cache)
-const MAX_CACHED_TABS = 20; // Limit cache size to most recent 20 tabs
-const CAPTURE_DELAY = 100; // Small delay for tab to render
-let isCapturing = false; // Prevent concurrent captures
+// ============================================================================
+// PERFORMANCE-OPTIMIZED IMPLEMENTATION
+// Target: <100ms overlay open, <50MB with 100 tabs, 60fps animations
+// ============================================================================
 
-// Listen for tab activation to track recent order
-chrome.tabs.onActivated.addListener(async (activeInfo) => {
-  updateRecentTabOrder(activeInfo.tabId);
-  
-  // Automatically capture screenshot of newly activated tab
-  // This builds the cache naturally as user browses
-  if (isCapturing) return; // Skip if already capturing
-  
-  try {
-    isCapturing = true;
-    const tab = await chrome.tabs.get(activeInfo.tabId);
-    
-    // Check if tab is capturable
-    if (!tab.discarded && 
-        tab.url && 
-        !tab.url.startsWith('chrome://') && 
-        !tab.url.startsWith('chrome-extension://') &&
-        !tab.url.startsWith('edge://') &&
-        !tab.url.startsWith('about:')) {
-      
-      // Small delay to let page render
-      await new Promise(resolve => setTimeout(resolve, CAPTURE_DELAY));
-      
-      const screenshot = await chrome.tabs.captureVisibleTab(tab.windowId, {
-        format: "jpeg",
-        quality: 60
-      });
-      
-      tabScreenshots.set(activeInfo.tabId, screenshot);
-      screenshotTimestamps.set(activeInfo.tabId, Date.now());
-      
-      console.debug(`Captured screenshot for tab ${activeInfo.tabId}`);
-    }
-  } catch (error) {
-    // Silently fail - not critical
-    console.debug(`Could not capture tab ${activeInfo.tabId}:`, error.message);
-  } finally {
-    isCapturing = false;
+// ============================================================================
+// LRU CACHE IMPLEMENTATION
+// ============================================================================
+class LRUCache {
+  constructor(maxTabs = 30, maxBytes = 20 * 1024 * 1024) {
+    this.cache = new Map(); // Map for O(1) access
+    this.maxTabs = maxTabs;
+    this.maxBytes = maxBytes;
+    this.currentBytes = 0;
+    this.accessOrder = []; // Track access order for LRU
   }
-});
 
-// Update recent tab order
-function updateRecentTabOrder(tabId) {
-  // Remove if already exists
-  recentTabOrder = recentTabOrder.filter(id => id !== tabId);
-  // Add to front
-  recentTabOrder.unshift(tabId);
-  // Keep only last MAX_CACHED_TABS
-  if (recentTabOrder.length > MAX_CACHED_TABS) {
-    // Remove excess tabs from cache
-    const removedTabs = recentTabOrder.slice(MAX_CACHED_TABS);
-    removedTabs.forEach(id => {
-      tabScreenshots.delete(id);
-      screenshotTimestamps.delete(id);
-    });
-    recentTabOrder = recentTabOrder.slice(0, MAX_CACHED_TABS);
+  // Get item and mark as recently used
+  get(key) {
+    if (!this.cache.has(key)) return null;
+    
+    // Move to front of access order (most recent)
+    this.accessOrder = this.accessOrder.filter(k => k !== key);
+    this.accessOrder.unshift(key);
+    
+    return this.cache.get(key);
+  }
+
+  // Set item with automatic eviction
+  set(key, value) {
+    const size = this._estimateSize(value);
+    
+    // Remove existing entry if updating
+    if (this.cache.has(key)) {
+      const oldSize = this.cache.get(key).size;
+      this.currentBytes -= oldSize;
+    }
+    
+    // Evict if necessary
+    while (
+      (this.cache.size >= this.maxTabs || this.currentBytes + size > this.maxBytes) &&
+      this.cache.size > 0
+    ) {
+      this._evictLRU();
+    }
+    
+    // Add new entry
+    this.cache.set(key, { data: value, size, timestamp: Date.now() });
+    this.currentBytes += size;
+    
+    // Update access order
+    this.accessOrder = this.accessOrder.filter(k => k !== key);
+    this.accessOrder.unshift(key);
+  }
+
+  // Remove specific entry
+  delete(key) {
+    if (!this.cache.has(key)) return false;
+    
+    const entry = this.cache.get(key);
+    this.currentBytes -= entry.size;
+    this.cache.delete(key);
+    this.accessOrder = this.accessOrder.filter(k => k !== key);
+    
+    return true;
+  }
+
+  // Evict least recently used entry
+  _evictLRU() {
+    if (this.accessOrder.length === 0) return;
+    
+    const lruKey = this.accessOrder.pop(); // Remove from end (least recent)
+    const entry = this.cache.get(lruKey);
+    
+    if (entry) {
+      this.currentBytes -= entry.size;
+      this.cache.delete(lruKey);
+      console.debug(`[LRU] Evicted tab ${lruKey} (${(entry.size / 1024).toFixed(1)}KB)`);
+    }
+  }
+
+  // Estimate size of base64 screenshot
+  _estimateSize(data) {
+    // Base64 string size in bytes
+    return Math.ceil(data.length * 0.75); // Base64 is ~33% larger than binary
+  }
+
+  // Get cache statistics
+  getStats() {
+    return {
+      entries: this.cache.size,
+      bytes: this.currentBytes,
+      maxTabs: this.maxTabs,
+      maxBytes: this.maxBytes,
+      utilizationPercent: ((this.currentBytes / this.maxBytes) * 100).toFixed(1)
+    };
+  }
+
+  // Clear all entries
+  clear() {
+    this.cache.clear();
+    this.accessOrder = [];
+    this.currentBytes = 0;
   }
 }
 
-// Listen for command to show tab switcher
+// ============================================================================
+// CONSTANTS & CONFIGURATION
+// ============================================================================
+const PERF_CONFIG = {
+  MAX_CACHED_TABS: 30,              // LRU cache size
+  MAX_CACHE_BYTES: 20 * 1024 * 1024, // 20MB total cache
+  MAX_SCREENSHOT_SIZE: 200 * 1024,   // 200KB per screenshot
+  JPEG_QUALITY: 60,                  // JPEG compression quality
+  CAPTURE_DELAY: 100,                // Delay before capture (ms)
+  SCREENSHOT_CACHE_DURATION: 5 * 60 * 1000, // 5 minutes
+  MAX_CAPTURES_PER_SECOND: 2,        // Chrome API limit
+  THROTTLE_INTERVAL: 500,            // Min time between captures (ms)
+  PERFORMANCE_LOGGING: true          // Enable performance metrics
+};
+
+// ============================================================================
+// GLOBAL STATE
+// ============================================================================
+const screenshotCache = new LRUCache(
+  PERF_CONFIG.MAX_CACHED_TABS,
+  PERF_CONFIG.MAX_CACHE_BYTES
+);
+const recentTabOrder = []; // Track tab access order
+const captureQueue = []; // Queue for rate-limited captures
+let lastCaptureTime = 0; // Timestamp of last capture
+let isProcessingQueue = false; // Queue processing flag
+
+// ============================================================================
+// PERFORMANCE MONITORING
+// ============================================================================
+const perfMetrics = {
+  overlayOpenTimes: [],
+  captureCount: 0,
+  cacheHits: 0,
+  cacheMisses: 0,
+  
+  recordOverlayOpen(duration) {
+    this.overlayOpenTimes.push(duration);
+    if (this.overlayOpenTimes.length > 100) this.overlayOpenTimes.shift();
+    
+    if (PERF_CONFIG.PERFORMANCE_LOGGING) {
+      console.log(`[PERF] Overlay open: ${duration.toFixed(2)}ms (Target: <100ms)`);
+    }
+  },
+  
+  getAverageOverlayTime() {
+    if (this.overlayOpenTimes.length === 0) return 0;
+    const sum = this.overlayOpenTimes.reduce((a, b) => a + b, 0);
+    return sum / this.overlayOpenTimes.length;
+  },
+  
+  logStats() {
+    const cacheStats = screenshotCache.getStats();
+    const avgOverlay = this.getAverageOverlayTime();
+    
+    console.log(`[STATS] ═══════════════════════════════════════`);
+    console.log(`[STATS] Cache: ${cacheStats.entries}/${cacheStats.maxTabs} tabs`);
+    console.log(`[STATS] Memory: ${(cacheStats.bytes / 1024 / 1024).toFixed(2)}MB / ${(cacheStats.maxBytes / 1024 / 1024).toFixed(2)}MB (${cacheStats.utilizationPercent}%)`);
+    console.log(`[STATS] Captures: ${this.captureCount} (Hits: ${this.cacheHits}, Misses: ${this.cacheMisses})`);
+    console.log(`[STATS] Avg Overlay Open: ${avgOverlay.toFixed(2)}ms (Target: <100ms)`);
+    console.log(`[STATS] ═══════════════════════════════════════`);
+  }
+};
+
+// ============================================================================
+// SCREENSHOT CAPTURE WITH RATE LIMITING
+// ============================================================================
+
+// Add capture to queue
+function queueCapture(tabId, priority = false) {
+  // Check if already in queue
+  if (captureQueue.some(item => item.tabId === tabId)) {
+    return;
+  }
+  
+  const queueItem = { tabId, timestamp: Date.now() };
+  
+  if (priority) {
+    captureQueue.unshift(queueItem);
+  } else {
+    captureQueue.push(queueItem);
+  }
+  
+  processQueue();
+}
+
+// Process capture queue with rate limiting
+async function processQueue() {
+  if (isProcessingQueue || captureQueue.length === 0) return;
+  
+  isProcessingQueue = true;
+  
+  while (captureQueue.length > 0) {
+    const now = Date.now();
+    const timeSinceLastCapture = now - lastCaptureTime;
+    
+    // Enforce rate limit: max 2 captures per second
+    if (timeSinceLastCapture < PERF_CONFIG.THROTTLE_INTERVAL) {
+      const waitTime = PERF_CONFIG.THROTTLE_INTERVAL - timeSinceLastCapture;
+      await new Promise(resolve => setTimeout(resolve, waitTime));
+    }
+    
+    const item = captureQueue.shift();
+    await captureTabScreenshot(item.tabId);
+    lastCaptureTime = Date.now();
+  }
+  
+  isProcessingQueue = false;
+}
+
+// Capture screenshot with error handling and compression
+async function captureTabScreenshot(tabId) {
+  try {
+    const tab = await chrome.tabs.get(tabId);
+    
+    // Check if tab is capturable
+    if (!isTabCapturable(tab)) {
+      console.debug(`[CAPTURE] Tab ${tabId} not capturable: ${tab.url}`);
+      return null;
+    }
+    
+    // Small delay for rendering
+    await new Promise(resolve => setTimeout(resolve, PERF_CONFIG.CAPTURE_DELAY));
+    
+    // Capture screenshot
+    const startTime = performance.now();
+    const screenshot = await chrome.tabs.captureVisibleTab(tab.windowId, {
+      format: 'jpeg',
+      quality: PERF_CONFIG.JPEG_QUALITY
+    });
+    const captureTime = performance.now() - startTime;
+    
+    // Check size and compress if needed
+    const size = screenshotCache._estimateSize(screenshot);
+    if (size > PERF_CONFIG.MAX_SCREENSHOT_SIZE) {
+      console.warn(`[CAPTURE] Screenshot too large: ${(size / 1024).toFixed(1)}KB, skipping`);
+      return null;
+    }
+    
+    // Store in LRU cache
+    screenshotCache.set(tabId, screenshot);
+    perfMetrics.captureCount++;
+    
+    if (PERF_CONFIG.PERFORMANCE_LOGGING) {
+      console.debug(`[CAPTURE] Tab ${tabId}: ${captureTime.toFixed(2)}ms, ${(size / 1024).toFixed(1)}KB`);
+    }
+    
+    return screenshot;
+  } catch (error) {
+    console.debug(`[CAPTURE] Failed for tab ${tabId}:`, error.message);
+    return null;
+  }
+}
+
+// Check if tab can be captured
+function isTabCapturable(tab) {
+  if (tab.discarded) return false;
+  if (!tab.url) return false;
+  
+  const protectedSchemes = ['chrome://', 'chrome-extension://', 'edge://', 'about:', 'file://'];
+  return !protectedSchemes.some(scheme => tab.url.startsWith(scheme));
+}
+
+// ============================================================================
+// TAB EVENT LISTENERS
+// ============================================================================
+
+// Listen for tab activation - auto-capture screenshots
+chrome.tabs.onActivated.addListener(async (activeInfo) => {
+  updateRecentTabOrder(activeInfo.tabId);
+  
+  // Queue capture for newly activated tab (non-blocking)
+  queueCapture(activeInfo.tabId, true); // Priority capture for active tab
+});
+
+// Clean up when tabs are closed
+chrome.tabs.onRemoved.addListener((tabId) => {
+  screenshotCache.delete(tabId);
+  removeFromRecentOrder(tabId);
+  console.debug(`[CLEANUP] Removed tab ${tabId} from cache`);
+});
+
+// Update tab order tracking
+function updateRecentTabOrder(tabId) {
+  removeFromRecentOrder(tabId);
+  recentTabOrder.unshift(tabId);
+  
+  // Keep only necessary entries
+  if (recentTabOrder.length > PERF_CONFIG.MAX_CACHED_TABS * 2) {
+    recentTabOrder.length = PERF_CONFIG.MAX_CACHED_TABS * 2;
+  }
+}
+
+function removeFromRecentOrder(tabId) {
+  const index = recentTabOrder.indexOf(tabId);
+  if (index !== -1) {
+    recentTabOrder.splice(index, 1);
+  }
+}
+
+// ============================================================================
+// COMMAND HANDLER - SHOW TAB SWITCHER
+// ============================================================================
+
+// Listen for keyboard shortcut
 chrome.commands.onCommand.addListener((command) => {
   if (command === "show-tab-switcher" || command === "cycle-next-tab") {
     handleShowTabSwitcher();
   }
 });
 
-// Handle showing the tab switcher
+// Handle showing the tab switcher - OPTIMIZED FOR <100ms
 async function handleShowTabSwitcher() {
+  const startTime = performance.now();
+  
   try {
-    // Get current window tabs
+    // Get current window tabs (cached query when possible)
     const currentWindow = await chrome.windows.getCurrent();
     const tabs = await chrome.tabs.query({ windowId: currentWindow.id });
     
-    // Sort tabs by recent order
+    // Sort by recent order
     const sortedTabs = sortTabsByRecent(tabs);
     
-    // INSTANT RESPONSE: Return tabs with only cached screenshots
-    // No waiting, no capturing - overlay opens immediately
-    const tabsWithScreenshots = sortedTabs.map(tab => ({
-      id: tab.id,
-      title: tab.title || "Untitled",
-      url: tab.url,
-      favIconUrl: tab.favIconUrl,
-      screenshot: tabScreenshots.get(tab.id) || null, // Use cached or null
-      pinned: tab.pinned,
-      index: tab.index,
-      active: tab.active
-    }));
+    // INSTANT RESPONSE: Build tab data with cached screenshots only
+    // No waiting for captures - overlay opens immediately
+    const tabsData = sortedTabs.map(tab => {
+      const screenshot = screenshotCache.get(tab.id);
+      
+      if (screenshot) {
+        perfMetrics.cacheHits++;
+      } else {
+        perfMetrics.cacheMisses++;
+        // Queue background capture for next time (non-blocking)
+        queueCapture(tab.id, false);
+      }
+      
+      return {
+        id: tab.id,
+        title: tab.title || "Untitled",
+        url: tab.url,
+        favIconUrl: tab.favIconUrl,
+        screenshot: screenshot ? screenshot.data : null,
+        pinned: tab.pinned,
+        index: tab.index,
+        active: tab.active
+      };
+    });
     
     // Get active tab
     const [activeTab] = await chrome.tabs.query({ active: true, currentWindow: true });
     
-    // Send message to content script to show overlay IMMEDIATELY
-    try {
-      await chrome.tabs.sendMessage(activeTab.id, {
-        action: "showTabSwitcher",
-        tabs: tabsWithScreenshots,
-        activeTabId: activeTab.id
-      });
-    } catch (err) {
-      console.log("Content script not ready, injecting...");
-      // If content script not ready, inject it
+    // Send to content script IMMEDIATELY
+    await sendMessageWithRetry(activeTab.id, {
+      action: "showTabSwitcher",
+      tabs: tabsData,
+      activeTabId: activeTab.id
+    });
+    
+    // Record performance
+    const duration = performance.now() - startTime;
+    perfMetrics.recordOverlayOpen(duration);
+    
+  } catch (error) {
+    console.error("[ERROR] Failed to show tab switcher:", error);
+  }
+}
+
+// Send message with automatic script injection
+async function sendMessageWithRetry(tabId, message, retries = 1) {
+  try {
+    await chrome.tabs.sendMessage(tabId, message);
+  } catch (err) {
+    if (retries > 0 && err.message.includes('Could not establish connection')) {
+      console.log("[INJECT] Content script not ready, injecting...");
+      
       try {
+        // Inject content script
         await chrome.scripting.executeScript({
-          target: { tabId: activeTab.id },
+          target: { tabId },
           files: ["content.js"]
         });
         
-        // Also inject CSS
+        // Inject CSS
         await chrome.scripting.insertCSS({
-          target: { tabId: activeTab.id },
+          target: { tabId },
           files: ["overlay.css"]
         });
         
-        // Try again after injection with a longer delay
-        setTimeout(async () => {
-          try {
-            await chrome.tabs.sendMessage(activeTab.id, {
-              action: "showTabSwitcher",
-              tabs: tabsWithScreenshots,
-              activeTabId: activeTab.id
-            });
-          } catch (retryErr) {
-            console.error("Failed to show tab switcher after injection:", retryErr);
-          }
-        }, 200);
+        // Retry after injection
+        await new Promise(resolve => setTimeout(resolve, 150));
+        await chrome.tabs.sendMessage(tabId, message);
       } catch (injectErr) {
-        console.error("Failed to inject content script:", injectErr);
-        // Show alert to user
         if (injectErr.message.includes('cannot be scripted')) {
-          console.warn('Cannot inject on this page (chrome:// or extension page). Try on a regular webpage.');
+          console.warn('[INJECT] Cannot inject on this page (protected URL). Try on a regular webpage.');
+        } else {
+          throw injectErr;
         }
       }
+    } else {
+      throw err;
     }
-  } catch (error) {
-    console.error("Error showing tab switcher:", error);
   }
 }
 
@@ -152,133 +415,91 @@ function sortTabsByRecent(tabs) {
     const aIndex = recentTabOrder.indexOf(a.id);
     const bIndex = recentTabOrder.indexOf(b.id);
     
+    // If neither in recent order, sort by tab index
     if (aIndex === -1 && bIndex === -1) return a.index - b.index;
+    
+    // If only one in recent order, prioritize it
     if (aIndex === -1) return 1;
     if (bIndex === -1) return -1;
     
+    // Both in recent order, sort by recent order
     return aIndex - bIndex;
   });
 }
 
-// Capture screenshots for tabs
-// NOTE: This function is no longer used for showing overlay
-// It can be used for on-demand capture if needed
-async function captureTabScreenshots(tabs) {
-  const tabsWithScreenshots = [];
-  const currentTime = Date.now();
-  
-  for (const tab of tabs) {
-    let screenshot = null;
-    
-    // Check if we have a cached screenshot that's still fresh
-    if (tabScreenshots.has(tab.id)) {
-      const timestamp = screenshotTimestamps.get(tab.id);
-      if (timestamp && (currentTime - timestamp) < SCREENSHOT_CACHE_DURATION) {
-        screenshot = tabScreenshots.get(tab.id);
-      }
-    }
-    
-    tabsWithScreenshots.push({
-      id: tab.id,
-      title: tab.title || "Untitled",
-      url: tab.url,
-      favIconUrl: tab.favIconUrl,
-      screenshot: screenshot,
-      pinned: tab.pinned,
-      index: tab.index,
-      active: tab.active
-    });
-  }
-  
-  return tabsWithScreenshots;
-}
+// ============================================================================
+// MESSAGE HANDLERS
+// ============================================================================
 
 // Listen for messages from content script
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
-  if (request.action === "switchToTab") {
-    chrome.tabs.update(request.tabId, { active: true })
-      .then(() => sendResponse({ success: true }))
-      .catch(err => sendResponse({ success: false, error: err.message }));
-    return true; // Keep channel open for async response
-  }
-  
-  if (request.action === "closeTab") {
-    chrome.tabs.remove(request.tabId)
-      .then(() => {
-        // Remove from cache
-        tabScreenshots.delete(request.tabId);
-        screenshotTimestamps.delete(request.tabId);
-        recentTabOrder = recentTabOrder.filter(id => id !== request.tabId);
+  // Handle async operations properly
+  handleMessage(request, sender, sendResponse);
+  return true; // Keep channel open for async response
+});
+
+async function handleMessage(request, sender, sendResponse) {
+  try {
+    switch (request.action) {
+      case "switchToTab":
+        await chrome.tabs.update(request.tabId, { active: true });
         sendResponse({ success: true });
-      })
-      .catch(err => sendResponse({ success: false, error: err.message }));
-    return true;
-  }
-  
-  if (request.action === "refreshTabList") {
-    handleShowTabSwitcher();
-    sendResponse({ success: true });
-    return true;
-  }
-  
-  if (request.action === "captureTabScreenshot") {
-    // Request to capture a specific tab's screenshot
-    (async () => {
-      try {
-        const tab = await chrome.tabs.get(request.tabId);
-        const wasActive = tab.active;
+        break;
         
-        if (!wasActive) {
-          await chrome.tabs.update(request.tabId, { active: true });
-          await new Promise(resolve => setTimeout(resolve, 100));
-        }
+      case "closeTab":
+        await chrome.tabs.remove(request.tabId);
+        // Cache cleanup handled by onRemoved listener
+        sendResponse({ success: true });
+        break;
         
-        const screenshot = await chrome.tabs.captureVisibleTab(tab.windowId, {
-          format: "jpeg",
-          quality: 50
+      case "refreshTabList":
+        await handleShowTabSwitcher();
+        sendResponse({ success: true });
+        break;
+        
+      case "captureTabScreenshot":
+        // Manual capture request
+        const screenshot = await captureTabScreenshot(request.tabId);
+        sendResponse({ 
+          success: !!screenshot, 
+          screenshot: screenshot 
         });
+        break;
         
-        tabScreenshots.set(request.tabId, screenshot);
-        screenshotTimestamps.set(request.tabId, Date.now());
+      case "getCacheStats":
+        const stats = screenshotCache.getStats();
+        sendResponse({ success: true, stats });
+        break;
         
-        sendResponse({ success: true, screenshot: screenshot });
-      } catch (error) {
-        sendResponse({ success: false, error: error.message });
-      }
-    })();
-    return true;
-  }
-});
-
-// Clear old screenshots periodically
-setInterval(() => {
-  const currentTime = Date.now();
-  for (const [tabId, timestamp] of screenshotTimestamps.entries()) {
-    if (currentTime - timestamp > SCREENSHOT_CACHE_DURATION) {
-      tabScreenshots.delete(tabId);
-      screenshotTimestamps.delete(tabId);
-      console.debug(`Cleaned up old screenshot for tab ${tabId}`);
+      default:
+        sendResponse({ success: false, error: "Unknown action" });
     }
+  } catch (error) {
+    console.error(`[ERROR] Message handler failed:`, error);
+    sendResponse({ success: false, error: error.message });
   }
-}, 60000); // Clean up every minute
-
-// Clean up when tabs are closed
-chrome.tabs.onRemoved.addListener((tabId) => {
-  tabScreenshots.delete(tabId);
-  screenshotTimestamps.delete(tabId);
-  recentTabOrder = recentTabOrder.filter(id => id !== tabId);
-  console.debug(`Cleaned up closed tab ${tabId}`);
-});
-
-// Log cache statistics
-function logCacheStats() {
-  console.log(`Screenshot cache: ${tabScreenshots.size} tabs, Recent order: ${recentTabOrder.length} tabs`);
 }
 
-// Log stats every 5 minutes in debug mode
-if (chrome.runtime.getManifest().version.includes('dev')) {
-  setInterval(logCacheStats, 300000);
+// ============================================================================
+// PERIODIC MAINTENANCE
+// ============================================================================
+
+// Log performance stats periodically
+if (PERF_CONFIG.PERFORMANCE_LOGGING) {
+  setInterval(() => {
+    perfMetrics.logStats();
+  }, 60000); // Every minute
 }
 
-console.log("Visual Tab Switcher background service worker loaded");
-console.log(`Cache settings: Max ${MAX_CACHED_TABS} tabs, ${SCREENSHOT_CACHE_DURATION/1000}s duration`);
+// ============================================================================
+// INITIALIZATION
+// ============================================================================
+
+console.log("═══════════════════════════════════════════════════════");
+console.log("Visual Tab Switcher - Performance Optimized");
+console.log("═══════════════════════════════════════════════════════");
+console.log(`Cache: Max ${PERF_CONFIG.MAX_CACHED_TABS} tabs, ${(PERF_CONFIG.MAX_CACHE_BYTES / 1024 / 1024).toFixed(2)}MB`);
+console.log(`Screenshots: Max ${(PERF_CONFIG.MAX_SCREENSHOT_SIZE / 1024).toFixed(0)}KB each, ${PERF_CONFIG.JPEG_QUALITY}% quality`);
+console.log(`Rate Limit: ${PERF_CONFIG.MAX_CAPTURES_PER_SECOND} captures/sec`);
+console.log(`Target: <100ms overlay open, <50MB memory, 60fps`);
+console.log("═══════════════════════════════════════════════════════");

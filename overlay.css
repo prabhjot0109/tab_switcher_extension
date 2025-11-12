@@ -1,6 +1,17 @@
 /* Visual Tab Switcher Overlay Styles */
+/* ============================================================================ */
+/* PERFORMANCE-OPTIMIZED with GPU ACCELERATION */
+/* All animations use transform3d for hardware acceleration */
+/* will-change hints for critical animation elements */
+/* Target: 60fps animations, zero jank */
+/* ============================================================================ */
 
-/* Overlay container */
+/* Remove default focus outlines - we use custom selection styles */
+.tab-switcher-overlay *:focus {
+  outline: none;
+}
+
+/* Overlay container - GPU accelerated */
 .tab-switcher-overlay {
   position: fixed;
   top: 0;
@@ -13,9 +24,11 @@
   justify-content: center;
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
   animation: fadeIn 0.2s ease-out;
+  will-change: opacity;
+  transform: translate3d(0, 0, 0); /* Force GPU layer */
 }
 
-/* Backdrop */
+/* Backdrop - GPU accelerated blur */
 .tab-switcher-backdrop {
   position: absolute;
   top: 0;
@@ -24,9 +37,11 @@
   bottom: 0;
   background: rgba(0, 0, 0, 0.75);
   backdrop-filter: blur(5px);
+  will-change: opacity;
+  transform: translate3d(0, 0, 0);
 }
 
-/* Main container */
+/* Main container - GPU accelerated transform */
 .tab-switcher-container {
   position: relative;
   background: #1e1e1e;
@@ -38,6 +53,8 @@
   flex-direction: column;
   box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
   animation: slideIn 0.3s ease-out;
+  will-change: transform, opacity;
+  transform: translate3d(0, 0, 0);
 }
 
 /* Search box */
@@ -56,6 +73,7 @@
 
 .tab-switcher-search:focus {
   border-color: #007acc;
+  outline: none; /* Remove default outline, we use border color instead */
 }
 
 .tab-switcher-search::placeholder {
@@ -72,6 +90,11 @@
   overflow-x: hidden;
   padding: 8px;
   margin: 0 -8px;
+  outline: none; /* Remove focus outline */
+}
+
+.tab-switcher-grid:focus {
+  outline: none; /* Ensure no outline on focus */
 }
 
 /* Scrollbar styling */
@@ -93,7 +116,7 @@
   background: #666;
 }
 
-/* Tab card */
+/* Tab card - GPU accelerated hover effects */
 .tab-card {
   background: #2d2d2d;
   border: 2px solid #404040;
@@ -102,10 +125,12 @@
   cursor: pointer;
   transition: all 0.2s ease;
   position: relative;
+  will-change: transform, box-shadow;
+  transform: translate3d(0, 0, 0); /* Force GPU layer */
 }
 
 .tab-card:hover {
-  transform: translateY(-4px);
+  transform: translate3d(0, -4px, 0); /* Use translate3d for GPU */
   box-shadow: 0 8px 16px rgba(0, 0, 0, 0.3);
   border-color: #555;
 }
@@ -113,7 +138,7 @@
 .tab-card.selected {
   border-color: #007acc;
   box-shadow: 0 0 0 3px rgba(0, 122, 204, 0.3);
-  transform: translateY(-4px);
+  transform: translate3d(0, -4px, 0);
 }
 
 /* Visual distinction for favicon tiles */
@@ -173,20 +198,22 @@
   position: relative;
 }
 
-/* Large favicon display */
+/* Large favicon display - GPU accelerated scale */
 .favicon-large {
   width: 64px;
   height: 64px;
   object-fit: contain;
   filter: drop-shadow(0 2px 8px rgba(0, 0, 0, 0.3));
   transition: transform 0.2s ease;
+  will-change: transform;
+  transform: translate3d(0, 0, 0);
 }
 
 .tab-card:hover .favicon-large {
-  transform: scale(1.1);
+  transform: translate3d(0, 0, 0) scale(1.1); /* GPU accelerated scale */
 }
 
-/* Letter fallback for missing favicons */
+/* Letter fallback for missing favicons - GPU accelerated */
 .favicon-letter {
   width: 80px;
   height: 80px;
@@ -201,10 +228,12 @@
   text-transform: uppercase;
   box-shadow: 0 4px 12px rgba(0, 122, 204, 0.4);
   transition: transform 0.2s ease;
+  will-change: transform;
+  transform: translate3d(0, 0, 0);
 }
 
 .tab-card:hover .favicon-letter {
-  transform: scale(1.1);
+  transform: translate3d(0, 0, 0) scale(1.1);
 }
 
 .tab-thumbnail .no-screenshot {
@@ -293,7 +322,7 @@
   text-overflow: ellipsis;
 }
 
-/* Close button */
+/* Close button - GPU accelerated */
 .tab-close-btn {
   position: absolute;
   top: 8px;
@@ -308,11 +337,13 @@
   line-height: 1;
   cursor: pointer;
   opacity: 0;
-  transition: all 0.2s;
+  transition: opacity 0.2s, transform 0.2s, background-color 0.2s;
   z-index: 10;
   display: flex;
   align-items: center;
   justify-content: center;
+  will-change: transform, opacity;
+  transform: translate3d(0, 0, 0);
 }
 
 .tab-card:hover .tab-close-btn,
@@ -322,7 +353,7 @@
 
 .tab-close-btn:hover {
   background: #e74c3c;
-  transform: scale(1.1);
+  transform: translate3d(0, 0, 0) scale(1.1); /* GPU accelerated scale */
 }
 
 /* Help text */
@@ -354,23 +385,25 @@
   font-style: italic;
 }
 
-/* Animations */
+/* Animations - GPU accelerated */
 @keyframes fadeIn {
   from {
     opacity: 0;
+    transform: translate3d(0, 0, 0);
   }
   to {
     opacity: 1;
+    transform: translate3d(0, 0, 0);
   }
 }
 
 @keyframes slideIn {
   from {
-    transform: scale(0.9);
+    transform: translate3d(0, 0, 0) scale(0.9);
     opacity: 0;
   }
   to {
-    transform: scale(1);
+    transform: translate3d(0, 0, 0) scale(1);
     opacity: 1;
   }
 }

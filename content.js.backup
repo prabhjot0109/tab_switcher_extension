@@ -1,0 +1,449 @@
+// Content script for Visual Tab Switcher overlay
+(function() {
+  'use strict';
+  
+  let overlay = null;
+  let currentTabs = [];
+  let selectedIndex = 0;
+  let isOverlayVisible = false;
+  let keyPressTimeout = null;
+  let ctrlPressed = false;
+  
+  // Listen for messages from background script
+  chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
+    if (request.action === "showTabSwitcher") {
+      showTabSwitcher(request.tabs, request.activeTabId);
+      sendResponse({ success: true });
+    }
+    return true;
+  });
+  
+  // Create overlay
+  function createOverlay() {
+    if (overlay) return;
+    
+    // Create overlay container
+    overlay = document.createElement('div');
+    overlay.id = 'visual-tab-switcher-overlay';
+    overlay.className = 'tab-switcher-overlay';
+    
+    // Create backdrop
+    const backdrop = document.createElement('div');
+    backdrop.className = 'tab-switcher-backdrop';
+    overlay.appendChild(backdrop);
+    
+    // Create main container
+    const container = document.createElement('div');
+    container.className = 'tab-switcher-container';
+    
+    // Create search box
+    const searchBox = document.createElement('input');
+    searchBox.type = 'text';
+    searchBox.className = 'tab-switcher-search';
+    searchBox.placeholder = 'Search tabs by title or URL...';
+    container.appendChild(searchBox);
+    
+    // Create grid container
+    const grid = document.createElement('div');
+    grid.className = 'tab-switcher-grid';
+    grid.id = 'tab-switcher-grid';
+    container.appendChild(grid);
+    
+    // Create help text
+    const helpText = document.createElement('div');
+    helpText.className = 'tab-switcher-help';
+    helpText.innerHTML = `
+      <span><kbd>Tab</kbd> or <kbd>Arrow Keys</kbd> to navigate</span>
+      <span><kbd>Enter</kbd> to switch</span>
+      <span><kbd>Esc</kbd> to close</span>
+      <span><kbd>Delete</kbd> to close tab</span>
+      <span class="help-note">💡 Tabs show favicons until visited (screenshots auto-captured)</span>
+    `;
+    container.appendChild(helpText);
+    
+    overlay.appendChild(container);
+    
+    // Add event listeners
+    searchBox.addEventListener('input', handleSearch);
+    searchBox.addEventListener('keydown', handleSearchKeydown);
+    
+    // Close on backdrop click
+    backdrop.addEventListener('click', () => closeOverlay());
+    
+    document.body.appendChild(overlay);
+  }
+  
+  // Show tab switcher
+  function showTabSwitcher(tabs, activeTabId) {
+    console.log('[Tab Switcher] showTabSwitcher called with tabs:', tabs);
+    console.log('[Tab Switcher] Number of tabs:', tabs ? tabs.length : 0);
+    
+    if (isOverlayVisible) {
+      console.log('[Tab Switcher] Overlay already visible, returning');
+      return;
+    }
+    
+    createOverlay();
+    currentTabs = tabs;
+    
+    // Find current active tab index
+    selectedIndex = tabs.findIndex(tab => tab.id === activeTabId);
+    if (selectedIndex === -1) selectedIndex = 0;
+    
+    console.log('[Tab Switcher] Selected index:', selectedIndex);
+    
+    // Render tabs
+    renderTabs(tabs);
+    
+    // Show overlay
+    overlay.style.display = 'flex';
+    isOverlayVisible = true;
+    
+    // Focus on search box
+    const searchBox = overlay.querySelector('.tab-switcher-search');
+    searchBox.value = '';
+    searchBox.focus();
+    
+    // Add keyboard listeners
+    document.addEventListener('keydown', handleKeyDown);
+    document.addEventListener('keyup', handleKeyUp);
+  }
+  
+  // Render tabs in grid
+  function renderTabs(tabs) {
+    console.log('[Tab Switcher] renderTabs called with tabs:', tabs);
+    console.log('[Tab Switcher] Rendering', tabs ? tabs.length : 0, 'tabs');
+    
+    const grid = document.getElementById('tab-switcher-grid');
+    
+    if (!grid) {
+      console.error('[Tab Switcher] ERROR: Grid element not found!');
+      return;
+    }
+    
+    console.log('[Tab Switcher] Grid element found:', grid);
+    grid.innerHTML = '';
+    
+    console.log('[Tab Switcher] Grid element found:', grid);
+    grid.innerHTML = '';
+    
+    if (!tabs || tabs.length === 0) {
+      console.warn('[Tab Switcher] No tabs to render!');
+      const emptyMsg = document.createElement('div');
+      emptyMsg.className = 'tab-switcher-empty';
+      emptyMsg.textContent = 'No tabs found';
+      grid.appendChild(emptyMsg);
+      return;
+    }
+    
+    console.log('[Tab Switcher] Starting to create tab cards...');
+    
+    tabs.forEach((tab, index) => {
+      try {
+        console.log(`[Tab Switcher] Creating card for tab ${index}:`, tab.title);
+        
+        const tabCard = document.createElement('div');
+        tabCard.className = 'tab-card';
+      
+      // Add class based on whether it has screenshot or not
+      if (tab.screenshot) {
+        tabCard.classList.add('has-screenshot');
+      } else {
+        tabCard.classList.add('has-favicon');
+      }
+      
+      if (index === selectedIndex) {
+        tabCard.classList.add('selected');
+      }
+      if (tab.pinned) {
+        tabCard.classList.add('pinned');
+      }
+      
+      // Screenshot/thumbnail or favicon tile
+      const thumbnail = document.createElement('div');
+      thumbnail.className = 'tab-thumbnail';
+      
+      if (tab.screenshot) {
+        // Show screenshot
+        const img = document.createElement('img');
+        img.src = tab.screenshot;
+        img.alt = tab.title;
+        img.className = 'screenshot-img';
+        thumbnail.appendChild(img);
+      } else {
+        // Show favicon tile
+        const faviconTile = document.createElement('div');
+        faviconTile.className = 'favicon-tile';
+        
+        // Favicon or fallback
+        if (tab.favIconUrl) {
+          const favicon = document.createElement('img');
+          favicon.src = tab.favIconUrl;
+          favicon.className = 'favicon-large';
+          favicon.onerror = () => {
+            // Fallback to first letter
+            favicon.style.display = 'none';
+            const letter = document.createElement('div');
+            letter.className = 'favicon-letter';
+            letter.textContent = (tab.title || 'T')[0].toUpperCase();
+            faviconTile.appendChild(letter);
+          };
+          faviconTile.appendChild(favicon);
+        } else {
+          // No favicon - show first letter
+          const letter = document.createElement('div');
+          letter.className = 'favicon-letter';
+          letter.textContent = (tab.title || 'T')[0].toUpperCase();
+          faviconTile.appendChild(letter);
+        }
+        
+        thumbnail.appendChild(faviconTile);
+      }
+      
+      tabCard.appendChild(thumbnail);
+      
+      // Info section
+      const info = document.createElement('div');
+      info.className = 'tab-info';
+      
+      // Favicon and title
+      const header = document.createElement('div');
+      header.className = 'tab-header';
+      
+      if (tab.favIconUrl && tab.screenshot) {
+        // Only show small favicon if we have screenshot
+        const favicon = document.createElement('img');
+        favicon.src = tab.favIconUrl;
+        favicon.className = 'tab-favicon';
+        favicon.onerror = () => favicon.style.display = 'none';
+        header.appendChild(favicon);
+      }
+      
+      const title = document.createElement('div');
+      title.className = 'tab-title';
+      title.textContent = tab.title;
+      title.title = tab.title;
+      header.appendChild(title);
+      
+      info.appendChild(header);
+      
+      // URL (only show for screenshot tiles to save space)
+      if (tab.screenshot) {
+        const url = document.createElement('div');
+        url.className = 'tab-url';
+        url.textContent = tab.url;
+        url.title = tab.url;
+        info.appendChild(url);
+      }
+      
+      tabCard.appendChild(info);
+      
+      // Close button
+      const closeBtn = document.createElement('button');
+      closeBtn.className = 'tab-close-btn';
+      closeBtn.innerHTML = '×';
+      closeBtn.title = 'Close tab';
+      closeBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        closeTab(tab.id, index);
+      });
+      tabCard.appendChild(closeBtn);
+      
+      // Click to switch
+      tabCard.addEventListener('click', () => {
+        switchToTab(tab.id);
+      });
+      
+      grid.appendChild(tabCard);
+    } catch (error) {
+      console.error(`[Tab Switcher] Error creating card for tab ${index}:`, error);
+    }
+    });
+    
+    console.log('[Tab Switcher] Finished rendering', tabs.length, 'tab cards');
+    console.log('[Tab Switcher] Grid now has', grid.children.length, 'children');
+  }
+  
+  // Handle keyboard navigation
+  function handleKeyDown(e) {
+    if (!isOverlayVisible) return;
+    
+    // Track Ctrl key
+    if (e.key === 'Control') {
+      ctrlPressed = true;
+    }
+    
+    switch(e.key) {
+      case 'Escape':
+        e.preventDefault();
+        closeOverlay();
+        break;
+        
+      case 'Enter':
+        e.preventDefault();
+        if (currentTabs[selectedIndex]) {
+          switchToTab(currentTabs[selectedIndex].id);
+        }
+        break;
+        
+      case 'Tab':
+        e.preventDefault();
+        if (e.shiftKey) {
+          selectPrevious();
+        } else {
+          selectNext();
+        }
+        break;
+        
+      case 'ArrowRight':
+      case 'ArrowDown':
+        e.preventDefault();
+        selectNext();
+        break;
+        
+      case 'ArrowLeft':
+      case 'ArrowUp':
+        e.preventDefault();
+        selectPrevious();
+        break;
+        
+      case 'Delete':
+      case 'Backspace':
+        e.preventDefault();
+        if (currentTabs[selectedIndex]) {
+          closeTab(currentTabs[selectedIndex].id, selectedIndex);
+        }
+        break;
+    }
+  }
+  
+  // Handle key up
+  function handleKeyUp(e) {
+    if (e.key === 'Control') {
+      ctrlPressed = false;
+    }
+  }
+  
+  // Handle search
+  function handleSearch(e) {
+    const query = e.target.value.toLowerCase();
+    
+    if (!query) {
+      renderTabs(currentTabs);
+      return;
+    }
+    
+    const filtered = currentTabs.filter(tab => 
+      tab.title.toLowerCase().includes(query) || 
+      tab.url.toLowerCase().includes(query)
+    );
+    
+    selectedIndex = 0;
+    renderTabs(filtered);
+  }
+  
+  // Handle search box keydown
+  function handleSearchKeydown(e) {
+    if (e.key === 'ArrowDown' || e.key === 'Tab') {
+      e.preventDefault();
+      selectNext();
+      // Keep focus on grid
+      document.getElementById('tab-switcher-grid').focus();
+    }
+  }
+  
+  // Select next tab
+  function selectNext() {
+    const visibleTabs = document.querySelectorAll('.tab-card');
+    if (visibleTabs.length === 0) return;
+    
+    selectedIndex = (selectedIndex + 1) % visibleTabs.length;
+    updateSelection();
+  }
+  
+  // Select previous tab
+  function selectPrevious() {
+    const visibleTabs = document.querySelectorAll('.tab-card');
+    if (visibleTabs.length === 0) return;
+    
+    selectedIndex = (selectedIndex - 1 + visibleTabs.length) % visibleTabs.length;
+    updateSelection();
+  }
+  
+  // Update visual selection
+  function updateSelection() {
+    const cards = document.querySelectorAll('.tab-card');
+    cards.forEach((card, index) => {
+      if (index === selectedIndex) {
+        card.classList.add('selected');
+        card.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+      } else {
+        card.classList.remove('selected');
+      }
+    });
+  }
+  
+  // Switch to tab
+  function switchToTab(tabId) {
+    chrome.runtime.sendMessage({
+      action: "switchToTab",
+      tabId: tabId
+    }, () => {
+      closeOverlay();
+    });
+  }
+  
+  // Close tab
+  function closeTab(tabId, index) {
+    chrome.runtime.sendMessage({
+      action: "closeTab",
+      tabId: tabId
+    }, (response) => {
+      if (response && response.success) {
+        // Remove from current list
+        currentTabs = currentTabs.filter(tab => tab.id !== tabId);
+        
+        // Adjust selected index
+        if (selectedIndex >= currentTabs.length) {
+          selectedIndex = Math.max(0, currentTabs.length - 1);
+        }
+        
+        // Re-render
+        const searchBox = overlay.querySelector('.tab-switcher-search');
+        const query = searchBox.value.toLowerCase();
+        
+        if (query) {
+          const filtered = currentTabs.filter(tab => 
+            tab.title.toLowerCase().includes(query) || 
+            tab.url.toLowerCase().includes(query)
+          );
+          renderTabs(filtered);
+        } else {
+          renderTabs(currentTabs);
+        }
+        
+        // Close overlay if no tabs left
+        if (currentTabs.length === 0) {
+          closeOverlay();
+        }
+      }
+    });
+  }
+  
+  // Close overlay
+  function closeOverlay() {
+    if (!isOverlayVisible) return;
+    
+    if (overlay) {
+      overlay.style.display = 'none';
+    }
+    
+    isOverlayVisible = false;
+    
+    // Remove keyboard listeners
+    document.removeEventListener('keydown', handleKeyDown);
+    document.removeEventListener('keyup', handleKeyUp);
+  }
+  
+  console.log("Visual Tab Switcher content script loaded");
+})();
