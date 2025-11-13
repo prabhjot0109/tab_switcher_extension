@@ -68,11 +68,19 @@
   transform: translate3d(0, 0, 0);
 }
 
+/* Search and actions row */
+.tab-switcher-search-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 20px;
+}
+
 /* Search box */
 .tab-switcher-search {
   width: 100%;
   padding: 12px 16px;
-  margin-bottom: 20px;
+  margin-bottom: 0;
   background: #2d2d2d;
   border: 2px solid #404040;
   border-radius: 8px;
@@ -92,10 +100,30 @@
   color: #888;
 }
 
+/* Recently closed button */
+.recently-closed-btn {
+  padding: 12px 14px;
+  background: #2d2d2d;
+  border: 2px solid #404040;
+  border-radius: 8px;
+  color: #ffffff;
+  font-size: 14px;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: border-color 0.2s, background-color 0.2s;
+}
+
+.recently-closed-btn:hover {
+  border-color: #007acc;
+  background-color: #333;
+}
+
 /* Grid container */
 .tab-switcher-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  /* Cap to 3 columns and make cards slimmer */
+  grid-template-columns: repeat(3, minmax(240px, 320px));
+  justify-content: center; /* center tracks when free space remains */
   gap: 16px;
   max-height: 60vh;
   overflow-y: auto;
@@ -435,13 +463,15 @@
 /* Responsive design */
 @media (max-width: 1200px) {
   .tab-switcher-grid {
-    grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+    /* Two slimmer columns on medium screens */
+    grid-template-columns: repeat(2, minmax(220px, 300px));
   }
 }
 
 @media (max-width: 768px) {
   .tab-switcher-grid {
-    grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+    /* Two columns until very small screens */
+    grid-template-columns: repeat(2, minmax(200px, 1fr));
     gap: 12px;
   }
   
@@ -585,13 +615,26 @@
     container.className = 'tab-switcher-container';
     container.style.transform = 'translate3d(0, 0, 0)'; // GPU acceleration
     
+    // Search + actions row
+    const searchRow = document.createElement('div');
+    searchRow.className = 'tab-switcher-search-row';
+
     // Search box
     const searchBox = document.createElement('input');
     searchBox.type = 'text';
     searchBox.className = 'tab-switcher-search';
     searchBox.placeholder = 'Search tabs by title or URL...';
     searchBox.autocomplete = 'off';
-    container.appendChild(searchBox);
+
+    // Recently closed button (UI only)
+    const recentBtn = document.createElement('button');
+    recentBtn.className = 'recently-closed-btn';
+    recentBtn.type = 'button';
+    recentBtn.textContent = 'Recently closed tabs';
+
+    searchRow.appendChild(searchBox);
+    searchRow.appendChild(recentBtn);
+    container.appendChild(searchRow);
     
     // Grid container with virtual scrolling support
     const grid = document.createElement('div');
@@ -604,11 +647,11 @@
      const helpText = document.createElement('div');
      helpText.className = 'tab-switcher-help';
      helpText.innerHTML = `
-       <span><kbd>↑</kbd> <kbd>↓</kbd> Navigate Rows</span>
-       <span><kbd>←</kbd> <kbd>→</kbd> Navigate Columns</span>
+       <span><kbd>↑</kbd> <kbd>↓</kbd> <kbd>←</kbd> <kbd>→</kbd> Navigation</span>
        <span><kbd>Tab</kbd> Down | <kbd>Shift+Tab</kbd> Up</span>
        <span><kbd>Enter</kbd> Switch</span>
        <span><kbd>Delete</kbd> Close Tab</span>
+       <span><kbd>.</kbd> Recently closed</span>
        <span><kbd>Esc</kbd> Exit</span>
      `;
      container.appendChild(helpText);
