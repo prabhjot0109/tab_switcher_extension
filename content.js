@@ -549,8 +549,16 @@
   // ============================================================================
   chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     if (request.action === "showTabSwitcher") {
+      // If overlay already visible, treat repeated Alt+Q as cycle-next
+      if (state.isOverlayVisible) {
+        selectNext();
+        // Ensure only one selection is highlighted
+        enforceSingleSelection(true);
+        sendResponse?.({ success: true, advanced: true });
+        return true;
+      }
       showTabSwitcher(request.tabs, request.activeTabId);
-      sendResponse({ success: true });
+      sendResponse?.({ success: true });
     }
     return true;
   });
@@ -755,6 +763,8 @@
     
     // Single DOM update
     grid.appendChild(fragment);
+    // After rendering, ensure only one card is selected in DOM
+    enforceSingleSelection(false);
     
     const duration = performance.now() - startTime;
     console.log(`[PERF] Rendered ${tabs.length} tabs in ${duration.toFixed(2)}ms`);
@@ -809,6 +819,7 @@
     
     // Setup intersection observer for lazy loading
     setupIntersectionObserver();
+    enforceSingleSelection(false);
     
     const duration = performance.now() - startTime;
     console.log(`[PERF] Virtual rendered ${endIndex - startIndex} of ${tabs.length} tabs in ${duration.toFixed(2)}ms`);
@@ -1111,6 +1122,16 @@
   
     function handleSearchKeydown(e) {
       try {
+        // Throttle navigation keys to ~60fps similar to global handler
+        const navKeys = ['Delete','Tab','ArrowDown','ArrowUp','ArrowRight','ArrowLeft','Enter'];
+        if (navKeys.includes(e.key)) {
+          const now = performance.now();
+          if (now - state.lastKeyTime < state.keyThrottleMs) {
+            e.preventDefault();
+            return;
+          }
+          state.lastKeyTime = now;
+        }
         // Allow Backspace to work normally for text editing
         if (e.key === 'Backspace') {
           // Don't prevent default - let it delete text naturally
@@ -1359,14 +1380,31 @@
       }
     }
   
+  function enforceSingleSelection(scrollIntoView) {
+    try {
+      const grid = state.domCache.grid;
+      if (!grid) return;
+      // Remove any stale selections currently in DOM
+      const selectedEls = grid.querySelectorAll('.tab-card.selected');
+      selectedEls.forEach(el => el.classList.remove('selected'));
+      // Apply selection to the current index if present in DOM
+      const target = grid.querySelector(`.tab-card[data-tab-index="${state.selectedIndex}"]`);
+      if (!target) return;
+      target.classList.add('selected');
+      if (scrollIntoView) {
+        requestAnimationFrame(() => {
+          target.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'nearest' });
+        });
+      }
+    } catch (error) {
+      console.error('[TAB SWITCHER] Error enforcing selection:', error);
+    }
+  }
+
   function updateSelection() {
     try {
-      if (!state.domCache.grid) {
-        console.warn('[TAB SWITCHER] Grid not available for selection update');
-        return;
-      }
-
-      // If in virtual mode and selected card is outside current window, re-render
+      if (!state.domCache.grid) return;
+      // Re-render window if virtual and out of range
       const isVirtual = state.filteredTabs && state.filteredTabs.length > 50;
       if (isVirtual) {
         const { startIndex, endIndex } = state.virtualScroll;
@@ -1374,27 +1412,7 @@
           renderTabsVirtual(state.filteredTabs);
         }
       }
-
-      // Find the card matching the selected logical index
-      const grid = state.domCache.grid;
-      const target = grid.querySelector(`.tab-card[data-tab-index="${state.selectedIndex}"]`);
-
-      // Clear previous selection (only current DOM subset)
-      grid.querySelectorAll('.tab-card.selected').forEach(el => el.classList.remove('selected'));
-
-      if (!target) {
-        // Nothing to select in DOM yet; rendering may be pending
-        return;
-      }
-
-      requestAnimationFrame(() => {
-        target.classList.add('selected');
-        target.scrollIntoView({
-          behavior: 'smooth',
-          block: 'nearest',
-          inline: 'nearest'
-        });
-      });
+      enforceSingleSelection(true);
     } catch (error) {
       console.error('[TAB SWITCHER] Error in updateSelection:', error);
     }
@@ -1410,15 +1428,15 @@
         return;
       }
       
-      chrome.runtime.sendMessage({
-        action: "switchToTab",
-        tabId: tabId
-      }, (response) => {
-        if (chrome.runtime.lastError) {
-          console.error('[TAB SWITCHER] Error switching to tab:', chrome.runtime.lastError.message);
-        }
-        closeOverlay();
-      });
+      // Fire-and-forget to avoid message port errors if the service worker sleeps
+      try {
+        chrome.runtime.sendMessage({ action: "switchToTab", tabId });
+      } catch (msgErr) {
+        // Silently ignore; background may be restarting
+        console.debug('[TAB SWITCHER] sendMessage warn:', msgErr?.message || msgErr);
+      }
+      // Close immediately; background will perform the switch
+      closeOverlay();
     } catch (error) {
       console.error('[TAB SWITCHER] Exception in switchToTab:', error);
       closeOverlay();
