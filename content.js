@@ -76,6 +76,12 @@
   margin-bottom: 20px;
 }
 
+/* Search wrapper to host inline back button */
+.tab-switcher-search-wrap {
+  position: relative;
+  flex: 1 1 auto;
+}
+
 /* Search box */
 .tab-switcher-search {
   width: 100%;
@@ -89,6 +95,7 @@
   outline: none;
   box-sizing: border-box;
   transition: border-color 0.2s;
+  padding-left: 44px; /* space for back button when visible */
 }
 
 .tab-switcher-search:focus {
@@ -98,6 +105,28 @@
 
 .tab-switcher-search::placeholder {
   color: #888;
+}
+
+/* Back button shown inside search when viewing recently closed */
+.recent-back-btn {
+  position: absolute;
+  top: 50%;
+  left: 10px;
+  transform: translateY(-50%);
+  width: 24px;
+  height: 24px;
+  display: none; /* visible in recent mode */
+  align-items: center;
+  justify-content: center;
+  background: #333;
+  border: 1px solid #444;
+  border-radius: 6px;
+  color: #fff;
+  cursor: pointer;
+}
+
+.recent-back-btn:hover {
+  border-color: #007acc;
 }
 
 /* Recently closed button */
@@ -131,6 +160,11 @@
   padding: 8px;
   margin: 0 -8px;
   outline: none;
+}
+
+/* Recently closed list uses a single-column layout */
+.tab-switcher-grid.recent-mode {
+  grid-template-columns: 1fr;
 }
 
 .tab-switcher-grid:focus {
@@ -180,6 +214,38 @@
   box-shadow: 0 0 0 3px rgba(0, 122, 204, 0.3);
   transform: translate3d(0, -4px, 0);
 }
+
+/* Compact row layout for recently closed items */
+.tab-card.recent-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.tab-card.recent-item .tab-thumbnail {
+  width: 48px;
+  height: 48px;
+  background: transparent;
+}
+
+.tab-card.recent-item .favicon-large {
+  width: 24px;
+  height: 24px;
+}
+
+.tab-card.recent-item .tab-info {
+  padding: 8px 12px;
+}
+
+.tab-card.recent-item .tab-header {
+  margin-bottom: 0;
+}
+
+.tab-card.recent-item .tab-title {
+  text-align: left;
+}
+
+.tab-card.recent-item .tab-close-btn { display: none; }
 
 /* Visual distinction for favicon tiles */
 .tab-card.has-favicon {
@@ -512,9 +578,12 @@
   const state = {
     overlay: null,
     currentTabs: [],
+    activeTabs: [],
     filteredTabs: [],
     selectedIndex: 0,
     isOverlayVisible: false,
+    viewMode: 'active',
+    recentItems: [],
     host: null,
     shadowRoot: null,
     styleElement: null,
@@ -523,7 +592,9 @@
     domCache: {
       grid: null,
       searchBox: null,
-      container: null
+      container: null,
+      searchWrap: null,
+      backBtn: null
     },
     
     // Virtual scrolling
@@ -627,20 +698,33 @@
     const searchRow = document.createElement('div');
     searchRow.className = 'tab-switcher-search-row';
 
-    // Search box
+    // Search wrapper and box
+    const searchWrap = document.createElement('div');
+    searchWrap.className = 'tab-switcher-search-wrap';
+
     const searchBox = document.createElement('input');
     searchBox.type = 'text';
     searchBox.className = 'tab-switcher-search';
     searchBox.placeholder = 'Search tabs by title or URL...';
     searchBox.autocomplete = 'off';
 
-    // Recently closed button (UI only)
+    // Back button (shown only in recent mode)
+    const backBtn = document.createElement('button');
+    backBtn.type = 'button';
+    backBtn.className = 'recent-back-btn';
+    backBtn.title = 'Back to Active Tabs';
+    backBtn.textContent = '←';
+    backBtn.addEventListener('click', () => switchToActive());
+
+    // Recently closed button (UI)
     const recentBtn = document.createElement('button');
     recentBtn.className = 'recently-closed-btn';
     recentBtn.type = 'button';
     recentBtn.textContent = 'Recently closed tabs';
-
-    searchRow.appendChild(searchBox);
+    recentBtn.addEventListener('click', () => switchToRecent());
+    searchWrap.appendChild(backBtn);
+    searchWrap.appendChild(searchBox);
+    searchRow.appendChild(searchWrap);
     searchRow.appendChild(recentBtn);
     container.appendChild(searchRow);
     
@@ -655,11 +739,11 @@
      const helpText = document.createElement('div');
      helpText.className = 'tab-switcher-help';
      helpText.innerHTML = `
-       <span><kbd>↑</kbd> <kbd>↓</kbd> <kbd>←</kbd> <kbd>→</kbd> Navigation</span>
-       <span><kbd>Tab</kbd> Down | <kbd>Shift+Tab</kbd> Up</span>
+       <span><kbd>Alt+Q</kbd> Navigate</span>
        <span><kbd>Enter</kbd> Switch</span>
        <span><kbd>Delete</kbd> Close Tab</span>
-       <span><kbd>.</kbd> Recently closed</span>
+       <span><kbd>.</kbd> Toggle Recent</span>
+       <span><kbd>Backspace</kbd> Exit Recent</span>
        <span><kbd>Esc</kbd> Exit</span>
      `;
      container.appendChild(helpText);
@@ -676,7 +760,7 @@
     
     // Cache DOM references
     state.overlay = overlay;
-    state.domCache = { grid, searchBox, container };
+    state.domCache = { grid, searchBox, container, searchWrap, backBtn };
     
     shadowRoot.appendChild(overlay);
     
@@ -694,8 +778,10 @@
     if (state.isOverlayVisible) return;
     
     createOverlay();
+    state.activeTabs = tabs;
     state.currentTabs = tabs;
     state.filteredTabs = tabs;
+    setViewMode('active');
     
     // Find active tab index
     state.selectedIndex = tabs.findIndex(tab => tab.id === activeTabId);
@@ -732,6 +818,68 @@
     
     const duration = performance.now() - startTime;
     console.log(`[PERF] Overlay rendered in ${duration.toFixed(2)}ms (Target: <16ms for 60fps)`);
+  }
+
+  // ============================================================================
+  // VIEW MODES: ACTIVE TABS vs RECENTLY CLOSED
+  // ============================================================================
+  function setViewMode(mode) {
+    state.viewMode = mode;
+    if (state.domCache?.backBtn) {
+      state.domCache.backBtn.style.display = mode === 'recent' ? 'flex' : 'none';
+    }
+    if (state.domCache?.searchBox) {
+      state.domCache.searchBox.placeholder = mode === 'recent'
+        ? 'Search recently closed tabs...'
+        : 'Search tabs by title or URL...';
+    }
+  }
+
+  async function switchToRecent() {
+    if (state.viewMode === 'recent') return;
+    setViewMode('recent');
+    // Fetch recently closed list from background
+    let items = [];
+    try {
+      items = await new Promise((resolve) => {
+        chrome.runtime.sendMessage({ action: 'getRecentlyClosed', maxResults: 50 }, (res) => {
+          if (res && res.success) resolve(res.items || []); else resolve([]);
+        });
+      });
+    } catch (e) {
+      console.error('[TAB SWITCHER] Failed to load recently closed:', e);
+    }
+    // Map to renderable items (no screenshots)
+    state.recentItems = items.map((it, idx) => ({
+      id: null,
+      title: it.title,
+      url: it.url,
+      favIconUrl: it.favIconUrl,
+      screenshot: null,
+      sessionId: it.sessionId,
+      index: idx
+    }));
+    state.currentTabs = state.recentItems;
+    state.filteredTabs = state.recentItems;
+    state.selectedIndex = 0;
+    renderTabsStandard(state.filteredTabs);
+    // Refocus search
+    state.domCache.searchBox.focus();
+  }
+
+  function switchToActive() {
+    if (state.viewMode === 'active') return;
+    setViewMode('active');
+    state.currentTabs = state.activeTabs || [];
+    state.filteredTabs = state.currentTabs;
+    state.selectedIndex = 0;
+    if (state.filteredTabs.length > 50) {
+      renderTabsVirtual(state.filteredTabs);
+    } else {
+      renderTabsStandard(state.filteredTabs);
+    }
+    state.domCache.searchBox.value = '';
+    state.domCache.searchBox.focus();
   }
   
   // ============================================================================
@@ -831,7 +979,13 @@
   function createTabCard(tab, index) {
     const tabCard = document.createElement('div');
     tabCard.className = 'tab-card';
-    tabCard.dataset.tabId = tab.id;
+    if (tab && typeof tab.id === 'number') {
+      tabCard.dataset.tabId = tab.id;
+    }
+    if (tab && tab.sessionId) {
+      tabCard.dataset.sessionId = tab.sessionId;
+      tabCard.dataset.recent = '1';
+    }
     tabCard.dataset.tabIndex = index;
     tabCard.setAttribute('role', 'button');
     tabCard.tabIndex = 0; // Make card focusable for accessibility
@@ -859,7 +1013,12 @@
     const thumbnail = document.createElement('div');
     thumbnail.className = 'tab-thumbnail';
     
-    if (hasValidScreenshot) {
+    if (tab.sessionId) {
+      // Recent item: always show favicon tile (compact row)
+      tabCard.classList.add('recent-item');
+      const faviconTile = createFaviconTile(tab);
+      thumbnail.appendChild(faviconTile);
+    } else if (hasValidScreenshot) {
       // Show screenshot only if it's valid
       const img = document.createElement('img');
       img.className = 'screenshot-img';
@@ -916,14 +1075,16 @@
     
     tabCard.appendChild(info);
     
-    // Close button
-    const closeBtn = document.createElement('button');
-    closeBtn.className = 'tab-close-btn';
-    closeBtn.innerHTML = '×';
-    closeBtn.title = 'Close tab';
-    closeBtn.dataset.action = 'close';
-    closeBtn.dataset.tabId = tab.id;
-    tabCard.appendChild(closeBtn);
+    // Close button (only for active tabs view)
+    if (!tab.sessionId) {
+      const closeBtn = document.createElement('button');
+      closeBtn.className = 'tab-close-btn';
+      closeBtn.innerHTML = '×';
+      closeBtn.title = 'Close tab';
+      closeBtn.dataset.action = 'close';
+      if (tab.id) closeBtn.dataset.tabId = tab.id;
+      tabCard.appendChild(closeBtn);
+    }
     
     return tabCard;
   }
@@ -979,6 +1140,13 @@
       // Handle tab card click
       const tabCard = target.closest('.tab-card');
       if (tabCard) {
+        if (state.viewMode === 'recent' || tabCard.dataset.recent === '1') {
+          const sessionId = tabCard.dataset.sessionId;
+          if (sessionId) {
+            restoreSession(sessionId);
+          }
+          return;
+        }
         const tabId = parseInt(tabCard.dataset.tabId);
         if (tabId && !isNaN(tabId)) {
           switchToTab(tabId);
@@ -1024,7 +1192,11 @@
           if (state.filteredTabs.length > 0 && state.selectedIndex >= 0 && state.selectedIndex < state.filteredTabs.length) {
             const selectedTab = state.filteredTabs[state.selectedIndex];
             if (selectedTab) {
-              switchToTab(selectedTab.id);
+              if (state.viewMode === 'recent' && selectedTab.sessionId) {
+                restoreSession(selectedTab.sessionId);
+              } else if (selectedTab.id) {
+                switchToTab(selectedTab.id);
+              }
             }
           }
           break;
@@ -1059,7 +1231,8 @@
           break;
           
         case 'Delete':
-          if (state.filteredTabs.length > 0 && state.selectedIndex >= 0 && state.selectedIndex < state.filteredTabs.length) {
+          // Delete only applies to active tabs view
+          if (state.viewMode !== 'recent' && state.filteredTabs.length > 0 && state.selectedIndex >= 0 && state.selectedIndex < state.filteredTabs.length) {
             e.preventDefault();
             const tab = state.filteredTabs[state.selectedIndex];
             if (tab && tab.id) {
@@ -1083,6 +1256,17 @@
   function handleSearch(e) {
     try {
       const query = e.target.value.toLowerCase().trim();
+      // '.' quick toggle
+      if (query === '.' && e.inputType !== 'deleteContentBackward') {
+        // clear and toggle view
+        state.domCache.searchBox.value = '';
+        if (state.viewMode === 'recent') {
+          switchToActive();
+        } else {
+          switchToRecent();
+        }
+        return;
+      }
       
       if (!query) {
         state.filteredTabs = state.currentTabs;
@@ -1097,11 +1281,11 @@
       }
       
       // Filter tabs
-      const filtered = state.currentTabs.filter(tab => 
-        tab && tab.title && tab.url &&
-        (tab.title.toLowerCase().includes(query) || 
-         tab.url.toLowerCase().includes(query))
-      );
+      const filtered = state.currentTabs.filter(item => {
+        const title = (item.title || '').toLowerCase();
+        const url = (item.url || '').toLowerCase();
+        return title.includes(query) || url.includes(query);
+      });
       
       state.filteredTabs = filtered;
       state.selectedIndex = 0;
@@ -1132,20 +1316,37 @@
           }
           state.lastKeyTime = now;
         }
-        // Allow Backspace to work normally for text editing
+        // '.' toggles between Active and Recently Closed when input empty
+        if (e.key === '.') {
+          const val = e.target.value || '';
+          if (val.length === 0) {
+            e.preventDefault();
+            if (state.viewMode === 'recent') {
+              switchToActive();
+            } else {
+              switchToRecent();
+            }
+            return;
+          }
+        }
+        // Backspace: if empty in recent mode, go back to active
         if (e.key === 'Backspace') {
-          // Don't prevent default - let it delete text naturally
+          const val = e.target.value || '';
+          if (val.length === 0 && state.viewMode === 'recent') {
+            e.preventDefault();
+            switchToActive();
+            return;
+          }
+          // else allow default deletion
           return;
         }
         
         // Delete key: Close selected tab even from search box
         if (e.key === 'Delete') {
           e.preventDefault();
-          if (state.filteredTabs.length > 0 && state.selectedIndex >= 0 && state.selectedIndex < state.filteredTabs.length) {
+          if (state.viewMode !== 'recent' && state.filteredTabs.length > 0 && state.selectedIndex >= 0 && state.selectedIndex < state.filteredTabs.length) {
             const tab = state.filteredTabs[state.selectedIndex];
-            if (tab && tab.id) {
-              closeTab(tab.id, state.selectedIndex);
-            }
+            if (tab && tab.id) closeTab(tab.id, state.selectedIndex);
           }
           return;
         }
@@ -1191,12 +1392,14 @@
           return;
         }
         
-        // Enter: Switch to selected tab
+        // Enter: Switch/restore selected item
         if (e.key === 'Enter') {
           e.preventDefault();
           if (state.filteredTabs.length > 0 && state.selectedIndex >= 0 && state.selectedIndex < state.filteredTabs.length) {
             const selectedTab = state.filteredTabs[state.selectedIndex];
-            if (selectedTab && selectedTab.id) {
+            if (state.viewMode === 'recent' && selectedTab && selectedTab.sessionId) {
+              restoreSession(selectedTab.sessionId);
+            } else if (selectedTab && selectedTab.id) {
               switchToTab(selectedTab.id);
             }
           }
@@ -1443,6 +1646,21 @@
     }
   }
   
+  function restoreSession(sessionId) {
+    try {
+      if (!sessionId) return;
+      try {
+        chrome.runtime.sendMessage({ action: 'restoreSession', sessionId });
+      } catch (msgErr) {
+        console.debug('[TAB SWITCHER] sendMessage warn:', msgErr?.message || msgErr);
+      }
+      closeOverlay();
+    } catch (error) {
+      console.error('[TAB SWITCHER] Exception in restoreSession:', error);
+      closeOverlay();
+    }
+  }
+  
   function closeTab(tabId, index) {
     try {
       if (!tabId || typeof tabId !== 'number') {
@@ -1621,5 +1839,58 @@
   console.log("Features: Virtual Scrolling, Event Delegation, GPU Acceleration");
   console.log("Target: <16ms interactions, 60fps, lazy loading");
   console.log("═══════════════════════════════════════════════════════");
+  
+  // ===============================
+  // VIEW MODE HELPERS
+  // ===============================
+  function setViewMode(mode) {
+    state.viewMode = mode;
+    if (state.domCache && state.domCache.backBtn) {
+      state.domCache.backBtn.style.display = mode === 'recent' ? 'flex' : 'none';
+    }
+    // Placeholder text
+    if (state.domCache && state.domCache.searchBox) {
+      state.domCache.searchBox.placeholder = mode === 'recent'
+        ? 'Search recently closed tabs...'
+        : 'Search tabs by title or URL...';
+    }
+  }
+
+  async function switchToRecent() {
+    try {
+      setViewMode('recent');
+      // Fetch recently closed items
+      const items = await new Promise(resolve => {
+        chrome.runtime.sendMessage({ action: 'getRecentlyClosed', maxResults: 50 }, (res) => {
+          if (!res || !res.success) return resolve([]);
+          resolve(res.items || []);
+        });
+      });
+      state.recentItems = items;
+      state.currentTabs = items; // reuse pipeline
+      state.filteredTabs = items;
+      state.selectedIndex = 0;
+      if (state.domCache.grid) state.domCache.grid.classList.add('recent-mode');
+      renderTabsStandard(items);
+      // focus search
+      state.domCache.searchBox.focus();
+    } catch (e) {
+      console.error('[TAB SWITCHER] Failed to load recently closed:', e);
+    }
+  }
+
+  function switchToActive() {
+    setViewMode('active');
+    state.currentTabs = state.activeTabs || [];
+    state.filteredTabs = state.currentTabs;
+    state.selectedIndex = 0;
+    if (state.domCache.grid) state.domCache.grid.classList.remove('recent-mode');
+    if (state.currentTabs.length > 50) {
+      renderTabsVirtual(state.currentTabs);
+    } else {
+      renderTabsStandard(state.currentTabs);
+    }
+    state.domCache.searchBox.focus();
+  }
   
 })();

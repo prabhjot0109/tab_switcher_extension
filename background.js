@@ -460,6 +460,64 @@ async function handleMessage(request, sender, sendResponse) {
     }
     
     switch (request.action) {
+      case "getRecentlyClosed":
+        try {
+          const sessions = await chrome.sessions.getRecentlyClosed({ maxResults: request.maxResults || 50 });
+          const items = [];
+          for (const s of sessions) {
+            if (s.tab) {
+              items.push({
+                kind: 'tab',
+                sessionId: s.tab.sessionId,
+                lastModified: s.lastModified,
+                title: s.tab.title || 'Untitled',
+                url: s.tab.url || '',
+                favIconUrl: s.tab.favIconUrl || ''
+              });
+            } else if (s.window && Array.isArray(s.window.tabs)) {
+              // Flatten window tabs into individual recent entries when possible
+              for (const t of s.window.tabs) {
+                items.push({
+                  kind: 'tab',
+                  sessionId: t.sessionId || s.window.sessionId, // fall back to window sessionId
+                  lastModified: s.lastModified,
+                  title: t.title || 'Untitled',
+                  url: t.url || '',
+                  favIconUrl: t.favIconUrl || ''
+                });
+              }
+            } else if (s.window && s.window.sessionId) {
+              // As a last resort, expose the window as a single restorable item
+              items.push({
+                kind: 'window',
+                sessionId: s.window.sessionId,
+                lastModified: s.lastModified,
+                title: 'Window',
+                url: '',
+                favIconUrl: ''
+              });
+            }
+          }
+          sendResponse({ success: true, items });
+        } catch (error) {
+          console.error('[ERROR] Failed to get recently closed:', error);
+          sendResponse({ success: false, error: error.message });
+        }
+        break;
+
+      case "restoreSession":
+        try {
+          if (!request.sessionId || typeof request.sessionId !== 'string') {
+            sendResponse({ success: false, error: 'Invalid sessionId' });
+            return;
+          }
+          const restored = await chrome.sessions.restore(request.sessionId);
+          sendResponse({ success: true, restored });
+        } catch (error) {
+          console.error('[ERROR] Failed to restore session:', error);
+          sendResponse({ success: false, error: error.message });
+        }
+        break;
       case "switchToTab":
         if (!request.tabId || typeof request.tabId !== 'number') {
           sendResponse({ success: false, error: "Invalid tab ID" });
