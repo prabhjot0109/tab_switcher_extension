@@ -79,6 +79,7 @@
   color: #ffffff;
   font-size: 16px;
   outline: none;
+  box-sizing: border-box;
   transition: border-color 0.2s;
 }
 
