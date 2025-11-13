@@ -1,0 +1,152 @@
+:root {
+  color-scheme: dark;
+  font-family: "Segoe UI", "SF Pro Text", system-ui, sans-serif;
+  background: #0f111a;
+  color: #f3f4f6;
+}
+
+body {
+  margin: 0;
+  padding: 24px;
+}
+
+main.opts-shell {
+  max-width: 720px;
+  margin: 0 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+h1 {
+  font-size: 28px;
+  margin: 0 0 8px;
+}
+
+h2 {
+  font-size: 18px;
+  margin: 0 0 16px;
+}
+
+p {
+  margin: 0;
+}
+
+.opts-card {
+  background: rgba(17, 24, 39, 0.72);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 16px;
+  padding: 20px 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  box-shadow: 0 15px 40px rgba(0, 0, 0, 0.35);
+}
+
+.opts-field {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.opts-field.inline {
+  flex-direction: row;
+  align-items: center;
+  gap: 12px;
+}
+
+label {
+  font-weight: 600;
+  font-size: 14px;
+}
+
+select,
+input[type="range"],
+button {
+  font-size: 15px;
+  border-radius: 10px;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  background: rgba(31, 41, 55, 0.6);
+  color: inherit;
+  padding: 10px 14px;
+  outline: none;
+}
+
+button {
+  cursor: pointer;
+  transition: transform 120ms ease, box-shadow 120ms ease, border-color 120ms ease;
+}
+
+button:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 12px 24px rgba(99, 102, 241, 0.3);
+  border-color: #6366f1;
+}
+
+button.ghost {
+  background: transparent;
+  border-color: rgba(255, 255, 255, 0.2);
+}
+
+input[type="checkbox"] {
+  width: 20px;
+  height: 20px;
+  border-radius: 6px;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  accent-color: #6366f1;
+}
+
+.toggle {
+  flex-direction: row;
+  align-items: center;
+}
+
+.toggle-label {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-weight: 500;
+}
+
+.help {
+  font-size: 13px;
+  color: rgba(209, 213, 219, 0.8);
+}
+
+.opts-footer {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-top: 12px;
+  padding: 8px 2px;
+}
+
+#status {
+  min-height: 24px;
+  font-size: 14px;
+  color: #a5b4fc;
+}
+
+#clearStatus {
+  min-width: 160px;
+}
+
+@media (max-width: 600px) {
+  body {
+    padding: 16px;
+  }
+
+  main.opts-shell {
+    gap: 16px;
+  }
+
+  .opts-card {
+    padding: 16px 18px;
+  }
+
+  .opts-field.inline {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+}
+

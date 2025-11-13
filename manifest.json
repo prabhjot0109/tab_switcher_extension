@@ -1,0 +1,66 @@
+{
+  "manifest_version": 3,
+  "name": "Visual Tab Switcher",
+  "description": "Custom tab switcher with thumbnail previews, search, and quick tab management.",
+  "version": "1.0.0",
+  "permissions": [
+    "tabs",
+    "activeTab",
+    "tabCapture",
+    "storage",
+    "scripting"
+  ],
+  "host_permissions": [
+    "<all_urls>"
+  ],
+  "optional_permissions": [
+    "tabGroups"
+  ],
+  "background": {
+    "service_worker": "background/service_worker.js"
+  },
+  "content_scripts": [
+    {
+      "matches": [
+        "<all_urls>"
+      ],
+      "js": [
+        "content/contentScript.js"
+      ],
+      "run_at": "document_start"
+    }
+  ],
+  "web_accessible_resources": [
+    {
+      "resources": [
+        "overlay/overlay.html",
+        "overlay/overlay.css",
+        "overlay/overlay.js",
+        "assets/*.svg",
+        "assets/*.png"
+      ],
+      "matches": [
+        "<all_urls>"
+      ]
+    }
+  ],
+  "commands": {
+    "toggle-tab-switcher": {
+      "suggested_key": {
+        "default": "Alt+Q",
+        "mac": "Alt+Q"
+      },
+      "description": "Show the visual tab switcher overlay."
+    }
+  },
+  "action": {
+    "default_title": "Visual Tab Switcher"
+  },
+  "icons": {
+    "16": "icons/icon16.png",
+    "48": "icons/icon48.png",
+    "128": "icons/icon128.png"
+  },
+  "options_page": "options/options.html"
+}
+

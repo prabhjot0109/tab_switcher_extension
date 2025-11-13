@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Visual Tab Switcher Overlay</title>
+    <link rel="stylesheet" href="overlay.css" />
+  </head>
+  <body>
+    <div id="app" class="vt-app" tabindex="-1">
+      <div class="vt-backdrop" aria-hidden="true"></div>
+      <main class="vt-container" role="dialog" aria-modal="true" aria-label="Visual Tab Switcher">
+        <header class="vt-header">
+          <div class="vt-search">
+            <span class="vt-search-icon" aria-hidden="true">🔍</span>
+            <input
+              type="text"
+              id="vt-search-input"
+              placeholder="Search tabs…"
+              autocomplete="off"
+              spellcheck="false"
+              aria-label="Search tabs"
+            />
+          </div>
+          <div class="vt-stats" id="vt-stats"></div>
+        </header>
+        <section id="vt-grid" class="vt-grid" role="listbox" aria-describedby="vt-stats"></section>
+        <footer class="vt-footer">
+          <div class="vt-shortcuts">
+            <span>Alt+Q cycle forward</span>
+            <span>Shift+Alt+Q cycle back</span>
+            <span>Enter to switch</span>
+            <span>Esc to cancel</span>
+            <span>⌫ on thumbnail closes tab</span>
+          </div>
+        </footer>
+      </main>
+    </div>
+    <script type="module" src="overlay.js"></script>
+  </body>
+</html>
+

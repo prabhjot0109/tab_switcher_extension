@@ -1,0 +1,99 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Visual Tab Switcher Options</title>
+    <link rel="stylesheet" href="options.css" />
+  </head>
+  <body>
+    <main class="opts-shell">
+      <header>
+        <h1>Visual Tab Switcher Preferences</h1>
+        <p>Customize how the overlay behaves and manage performance options.</p>
+      </header>
+
+      <section class="opts-card">
+        <h2>Behavior</h2>
+        <div class="opts-field">
+          <label for="windowScope">Tab scope</label>
+          <select id="windowScope">
+            <option value="all">All windows (default)</option>
+            <option value="current">Current window only</option>
+          </select>
+          <p class="help">Choose whether the switcher lists tabs from every Chrome window or only the current one.</p>
+        </div>
+
+        <div class="opts-field">
+          <label for="sortMode">Sort order</label>
+          <select id="sortMode">
+            <option value="recent">Recently used first</option>
+            <option value="index">Tab strip order</option>
+            <option value="title">Alphabetical by title</option>
+          </select>
+          <p class="help">Determine how the grid is ordered when you open the overlay.</p>
+        </div>
+      </section>
+
+      <section class="opts-card">
+        <h2>Appearance &amp; Controls</h2>
+        <div class="opts-field toggle">
+          <label class="toggle-label">
+            <input type="checkbox" id="showSearch" />
+            <span>Show search box</span>
+          </label>
+        </div>
+
+        <div class="opts-field toggle">
+          <label class="toggle-label">
+            <input type="checkbox" id="showCloseButtons" />
+            <span>Show close button on each thumbnail</span>
+          </label>
+        </div>
+      </section>
+
+      <section class="opts-card">
+        <h2>Performance</h2>
+        <div class="opts-field">
+          <label for="thumbnailQuality">Thumbnail quality (<span id="qualityValue">60</span>)</label>
+          <input type="range" id="thumbnailQuality" min="10" max="100" step="5" />
+          <p class="help">Lower values capture faster but may look blurrier. Chrome limits captures to the active tab.</p>
+        </div>
+
+        <div class="opts-field">
+          <label for="cacheExpiration">Screenshot cache duration</label>
+          <select id="cacheExpiration">
+            <option value="300000">5 minutes</option>
+            <option value="900000">15 minutes</option>
+            <option value="1800000">30 minutes</option>
+            <option value="3600000">1 hour</option>
+          </select>
+          <p class="help">Older screenshots are discarded when the overlay opens or when Chrome is idle.</p>
+        </div>
+
+        <div class="opts-field inline">
+          <button id="clearCache" type="button">Clear thumbnail cache</button>
+          <span id="clearStatus" class="help"></span>
+        </div>
+      </section>
+
+      <section class="opts-card">
+        <h2>Keyboard Shortcut</h2>
+        <p>
+          Default shortcut: <kbd>Alt</kbd> + <kbd>Q</kbd>. Choose a different key, if you like, under
+          <em>chrome://extensions/shortcuts</em>.
+        </p>
+        <div class="opts-field inline">
+          <button id="openShortcuts" type="button">Open shortcut settings</button>
+        </div>
+      </section>
+
+      <footer class="opts-footer">
+        <button id="resetDefaults" type="button" class="ghost">Reset to defaults</button>
+        <span id="status" role="status" aria-live="polite"></span>
+      </footer>
+    </main>
+    <script type="module" src="options.js"></script>
+  </body>
+</html>
+
