@@ -1255,9 +1255,13 @@
   // ============================================================================
   function handleSearch(e) {
     try {
-      const query = e.target.value.toLowerCase().trim();
+      const rawVal = (e && e.target && typeof e.target.value === 'string')
+        ? e.target.value
+        : (state.domCache?.searchBox?.value ?? '');
+      const query = String(rawVal).toLowerCase().trim();
       // '.' quick toggle
-      if (query === '.' && e.inputType !== 'deleteContentBackward') {
+      const isDeleteBackward = !!(e && typeof e.inputType === 'string' && e.inputType === 'deleteContentBackward');
+      if (query === '.' && !isDeleteBackward) {
         // clear and toggle view
         state.domCache.searchBox.value = '';
         if (state.viewMode === 'recent') {

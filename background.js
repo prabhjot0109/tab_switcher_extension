@@ -368,6 +368,12 @@ async function handleShowTabSwitcher() {
     
     // Get active tab
     const [activeTab] = await chrome.tabs.query({ active: true, currentWindow: true });
+
+    // Guard: Do not attempt to inject on protected pages (chrome://, edge://, etc.)
+    if (!isTabCapturable(activeTab)) {
+      console.warn('[INJECT] Cannot open overlay on protected page. Switch to a regular webpage and try again.');
+      return;
+    }
     
     // Send to content script IMMEDIATELY
     await sendMessageWithRetry(activeTab.id, {
@@ -410,7 +416,13 @@ async function sendMessageWithRetry(tabId, message, retries = 1) {
         await new Promise(resolve => setTimeout(resolve, 150));
         await chrome.tabs.sendMessage(tabId, message);
       } catch (injectErr) {
-        if (injectErr.message.includes('cannot be scripted')) {
+        const msg = (injectErr && injectErr.message) ? injectErr.message : '';
+        const protectedErr =
+          msg.includes('cannot be scripted') ||
+          msg.includes('Cannot access a chrome://') ||
+          msg.includes('Cannot access a chrome-extension://') ||
+          (msg.includes('Cannot access') && msg.includes('URL'));
+        if (protectedErr) {
           console.warn('[INJECT] Cannot inject on this page (protected URL). Try on a regular webpage.');
         } else {
           throw injectErr;
