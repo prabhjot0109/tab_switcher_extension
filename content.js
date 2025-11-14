@@ -412,8 +412,9 @@
     
     overlay.appendChild(container);
     
-    // Event listeners with throttling
-    searchBox.addEventListener('input', throttle(handleSearch, 100));
+    // Event listeners with improved debounce/throttle strategy
+    // Use different strategies for small vs large tab sets
+    searchBox.addEventListener('input', createSmartSearchHandler());
     searchBox.addEventListener('keydown', handleSearchKeydown);
     backdrop.addEventListener('click', closeOverlay);
     
@@ -918,6 +919,40 @@
   // ============================================================================
   // SEARCH HANDLING
   // ============================================================================
+  
+  // Create smart search handler with combined throttle + debounce
+  function createSmartSearchHandler() {
+    let debounceTimer = null;
+    let lastSearchTime = 0;
+    const THROTTLE_MS = 100;  // Immediate feedback for small tab sets
+    const DEBOUNCE_MS = 300;   // Wait for user to finish typing on large sets
+    const LARGE_TAB_THRESHOLD = 50;
+    
+    return function(e) {
+      const now = performance.now();
+      const timeSinceLastSearch = now - lastSearchTime;
+      const isLargeTabSet = state.currentTabs.length >= LARGE_TAB_THRESHOLD;
+      
+      // Clear any pending debounce
+      if (debounceTimer) {
+        clearTimeout(debounceTimer);
+      }
+      
+      // For small tab sets: throttle only (immediate feedback)
+      if (!isLargeTabSet && timeSinceLastSearch >= THROTTLE_MS) {
+        lastSearchTime = now;
+        handleSearch(e);
+      } 
+      // For large tab sets: debounce (wait for user to finish typing)
+      else {
+        debounceTimer = setTimeout(() => {
+          lastSearchTime = performance.now();
+          handleSearch(e);
+        }, isLargeTabSet ? DEBOUNCE_MS : THROTTLE_MS);
+      }
+    };
+  }
+  
   function handleSearch(e) {
     try {
       const rawVal = (e && e.target && typeof e.target.value === 'string')

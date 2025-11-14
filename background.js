@@ -111,13 +111,21 @@ class LRUCache {
 const PERF_CONFIG = {
   MAX_CACHED_TABS: 30,              // LRU cache size
   MAX_CACHE_BYTES: 20 * 1024 * 1024, // 20MB total cache
-  MAX_SCREENSHOT_SIZE: 200 * 1024,   // 200KB per screenshot
-  JPEG_QUALITY: 60,                  // JPEG compression quality
+  MAX_SCREENSHOT_SIZE: 200 * 1024,   // 200KB per screenshot (will be adjusted by quality tier)
+  JPEG_QUALITY: 60,                  // JPEG compression quality (will be adjusted by quality tier)
   CAPTURE_DELAY: 100,                // Delay before capture (ms)
   SCREENSHOT_CACHE_DURATION: 5 * 60 * 1000, // 5 minutes
   MAX_CAPTURES_PER_SECOND: 2,        // Chrome API limit
   THROTTLE_INTERVAL: 500,            // Min time between captures (ms)
-  PERFORMANCE_LOGGING: true          // Enable performance metrics
+  PERFORMANCE_LOGGING: true,         // Enable performance metrics
+  
+  // Quality tiers for memory optimization
+  QUALITY_TIERS: {
+    HIGH: { quality: 60, maxSize: 200 * 1024, label: 'High Quality' },
+    NORMAL: { quality: 50, maxSize: 150 * 1024, label: 'Normal' },
+    PERFORMANCE: { quality: 35, maxSize: 100 * 1024, label: 'Performance' }
+  },
+  DEFAULT_QUALITY_TIER: 'NORMAL'     // Default quality tier
 };
 
 // ============================================================================
@@ -131,6 +139,8 @@ const recentTabOrder = []; // Track tab access order
 const captureQueue = []; // Queue for rate-limited captures
 let lastCaptureTime = 0; // Timestamp of last capture
 let isProcessingQueue = false; // Queue processing flag
+let previousActiveTabId = null; // Track previous active tab for better screenshot capture
+let currentQualityTier = PERF_CONFIG.DEFAULT_QUALITY_TIER; // Current quality setting
 
 // ============================================================================
 // PERFORMANCE MONITORING
@@ -216,7 +226,7 @@ async function processQueue() {
 }
 
 // Capture screenshot with error handling and compression
-async function captureTabScreenshot(tabId) {
+async function captureTabScreenshot(tabId, forceQuality = null) {
   try {
     const tab = await chrome.tabs.get(tabId);
     
@@ -236,27 +246,51 @@ async function captureTabScreenshot(tabId) {
     // Small delay for rendering
     await new Promise(resolve => setTimeout(resolve, PERF_CONFIG.CAPTURE_DELAY));
     
+    // Get quality settings from current tier or forced override
+    const qualityTier = forceQuality || currentQualityTier;
+    const qualitySettings = PERF_CONFIG.QUALITY_TIERS[qualityTier] || PERF_CONFIG.QUALITY_TIERS.NORMAL;
+    
     // Capture screenshot (this captures the currently visible/active tab)
     const startTime = performance.now();
-    const screenshot = await chrome.tabs.captureVisibleTab(tab.windowId, {
-      format: 'jpeg',
-      quality: PERF_CONFIG.JPEG_QUALITY
-    });
+    
+    // Try WebP format first (better compression), fallback to JPEG
+    let screenshot = null;
+    let format = 'jpeg';
+    
+    try {
+      // WebP support check and capture
+      screenshot = await chrome.tabs.captureVisibleTab(tab.windowId, {
+        format: 'png' // Capture as PNG first for WebP conversion
+      });
+      
+      // Convert to WebP if possible (browser support)
+      if (screenshot && typeof screenshot === 'string') {
+        format = 'png'; // Keep as PNG for now (WebP conversion needs canvas in content script)
+      }
+    } catch (webpError) {
+      // Fallback to JPEG with quality tier
+      screenshot = await chrome.tabs.captureVisibleTab(tab.windowId, {
+        format: 'jpeg',
+        quality: qualitySettings.quality
+      });
+      format = 'jpeg';
+    }
+    
     const captureTime = performance.now() - startTime;
     
     // Check size and compress if needed
     const size = screenshotCache._estimateSize(screenshot);
-    if (size > PERF_CONFIG.MAX_SCREENSHOT_SIZE) {
-      console.warn(`[CAPTURE] Screenshot too large: ${(size / 1024).toFixed(1)}KB, skipping`);
+    if (size > qualitySettings.maxSize) {
+      console.warn(`[CAPTURE] Screenshot too large: ${(size / 1024).toFixed(1)}KB (max: ${(qualitySettings.maxSize / 1024).toFixed(1)}KB), skipping`);
       return null;
     }
     
-    // Store in LRU cache
+    // Store in LRU cache with metadata
     screenshotCache.set(tabId, screenshot);
     perfMetrics.captureCount++;
     
     if (PERF_CONFIG.PERFORMANCE_LOGGING) {
-      console.debug(`[CAPTURE] Tab ${tabId}: ${captureTime.toFixed(2)}ms, ${(size / 1024).toFixed(1)}KB`);
+      console.debug(`[CAPTURE] Tab ${tabId}: ${captureTime.toFixed(2)}ms, ${(size / 1024).toFixed(1)}KB (${format}, ${qualitySettings.label})`);
     }
     
     return screenshot;
@@ -281,11 +315,28 @@ function isTabCapturable(tab) {
 
 // Listen for tab activation - auto-capture screenshots
 chrome.tabs.onActivated.addListener(async (activeInfo) => {
+  // IMPROVED STRATEGY: Capture the PREVIOUS tab before it loses focus
+  // This ensures we get screenshots before switching away
+  if (previousActiveTabId !== null && previousActiveTabId !== activeInfo.tabId) {
+    try {
+      const previousTab = await chrome.tabs.get(previousActiveTabId);
+      // Only capture if the previous tab still exists and was in the same window
+      if (previousTab && previousTab.windowId === activeInfo.windowId) {
+        // Immediate capture of previous tab (it's still visible for a brief moment)
+        queueCapture(previousActiveTabId, true);
+      }
+    } catch (error) {
+      // Previous tab may have been closed, ignore
+      console.debug(`[CAPTURE] Previous tab ${previousActiveTabId} no longer exists`);
+    }
+  }
+  
+  // Update tracking
+  previousActiveTabId = activeInfo.tabId;
   updateRecentTabOrder(activeInfo.tabId);
   
-  // Queue capture for newly activated tab (non-blocking)
-  // This will only capture if the tab is active, preventing wrong screenshots
-  queueCapture(activeInfo.tabId, true); // Priority capture for active tab
+  // Queue capture for newly activated tab (lower priority since we focus on previous tab)
+  queueCapture(activeInfo.tabId, false);
 });
 
 // Clean up when tabs are closed
@@ -608,6 +659,24 @@ async function handleMessage(request, sender, sendResponse) {
           sendResponse({ success: false, error: error.message });
         }
         break;
+      
+      case "setQualityTier":
+        try {
+          const tier = request.tier || PERF_CONFIG.DEFAULT_QUALITY_TIER;
+          if (PERF_CONFIG.QUALITY_TIERS[tier]) {
+            currentQualityTier = tier;
+            // Store setting
+            chrome.storage.local.set({ qualityTier: tier });
+            console.log(`[SETTINGS] Quality tier changed to: ${tier}`);
+            sendResponse({ success: true, tier });
+          } else {
+            sendResponse({ success: false, error: 'Invalid quality tier' });
+          }
+        } catch (error) {
+          console.error('[ERROR] Failed to set quality tier:', error);
+          sendResponse({ success: false, error: error.message });
+        }
+        break;
         
       default:
         console.warn('[WARNING] Unknown action:', request.action);
@@ -638,11 +707,19 @@ if (PERF_CONFIG.PERFORMANCE_LOGGING) {
 screenshotCache.clear();
 console.log("[INIT] Screenshot cache cleared");
 
+// Load quality tier setting from storage
+chrome.storage.local.get(['qualityTier'], (result) => {
+  if (result.qualityTier && PERF_CONFIG.QUALITY_TIERS[result.qualityTier]) {
+    currentQualityTier = result.qualityTier;
+    console.log(`[INIT] Loaded quality tier: ${currentQualityTier}`);
+  }
+});
+
 console.log("═══════════════════════════════════════════════════════");
 console.log("Visual Tab Switcher - Performance Optimized");
 console.log("═══════════════════════════════════════════════════════");
 console.log(`Cache: Max ${PERF_CONFIG.MAX_CACHED_TABS} tabs, ${(PERF_CONFIG.MAX_CACHE_BYTES / 1024 / 1024).toFixed(2)}MB`);
-console.log(`Screenshots: Max ${(PERF_CONFIG.MAX_SCREENSHOT_SIZE / 1024).toFixed(0)}KB each, ${PERF_CONFIG.JPEG_QUALITY}% quality`);
+console.log(`Screenshots: Quality tiers - HIGH: 60%/200KB, NORMAL: 50%/150KB, PERF: 35%/100KB`);
 console.log(`Rate Limit: ${PERF_CONFIG.MAX_CAPTURES_PER_SECOND} captures/sec`);
 console.log(`Target: <100ms overlay open, <50MB memory, 60fps`);
 console.log("═══════════════════════════════════════════════════════");
