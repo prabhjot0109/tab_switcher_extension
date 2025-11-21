@@ -643,6 +643,12 @@ kbd {
     document.addEventListener("keydown", handleKeyDown);
     document.addEventListener("keyup", handleKeyUp);
 
+    // Aggressive Focus Enforcement: Prevent page from stealing focus or receiving keys
+    document.addEventListener("focus", handleGlobalFocus, true);
+    document.addEventListener("keydown", handleGlobalKeydown, true);
+    document.addEventListener("keypress", handleGlobalKeydown, true);
+    document.addEventListener("keyup", handleGlobalKeydown, true);
+
     const duration = performance.now() - startTime;
     console.log(
       `[PERF] Overlay rendered in ${duration.toFixed(
@@ -1370,6 +1376,57 @@ kbd {
   }
 
   // ============================================================================
+  // FOCUS & EVENT CAPTURE (PREVENT TYPING ON PAGE)
+  // ============================================================================
+
+  function handleGlobalFocus(e) {
+    if (!state.isOverlayVisible) return;
+
+    // If focus moves to something other than our host (shadow host), force it back.
+    // When focus is inside Shadow DOM, document.activeElement is the host.
+    // If e.target is NOT the host, it means focus went to a page element.
+    if (e.target !== state.host) {
+      e.stopPropagation();
+      e.preventDefault();
+      if (state.domCache && state.domCache.searchBox) {
+        state.domCache.searchBox.focus();
+      }
+    }
+  }
+
+  function handleGlobalKeydown(e) {
+    if (!state.isOverlayVisible) return;
+
+    // If the event target is NOT inside our shadow root (or is the host),
+    // it means the event is targeting the page body/inputs.
+    // We must stop it from reaching the page, but allow it if it's bubbling up from our shadow DOM.
+
+    // However, since we are capturing at window level:
+    // If we stop propagation here, it won't reach our shadow DOM either if we are not careful.
+    // BUT, if focus is correctly on our search box, the event path starts at search box.
+    // The capture phase goes Window -> ... -> Host -> SearchBox.
+    // If we stop at Window Capture, we kill it for everyone.
+
+    // Strategy: Only stop if the target is NOT our host/shadow content.
+    // But at Window Capture, e.target is the *intended* target.
+    // If focus is on the page input, e.target is the page input. We want to BLOCK that.
+    // If focus is on our search box, e.target is our host (from document perspective) or search box (from shadow perspective).
+    // Actually, for events originating in Shadow DOM, e.target is retargeted to the host.
+
+    if (e.target !== state.host) {
+      // Target is outside our extension. Block it.
+      e.stopPropagation();
+      e.preventDefault();
+
+      // Redirect key to our search box if it's a printable char or nav key?
+      // Better: Just enforce focus. The user will have to type again, but at least it won't type on the page.
+      if (state.domCache && state.domCache.searchBox) {
+        state.domCache.searchBox.focus();
+      }
+    }
+  }
+
+  // ============================================================================
   // SELECTION MANAGEMENT
   // ============================================================================
   function getGridColumns() {
@@ -1770,6 +1827,12 @@ kbd {
           document.removeEventListener("keydown", handleKeyDown);
           document.removeEventListener("keyup", handleKeyUp);
 
+          // Remove focus enforcement listeners
+          document.removeEventListener("focus", handleGlobalFocus, true);
+          document.removeEventListener("keydown", handleGlobalKeydown, true);
+          document.removeEventListener("keypress", handleGlobalKeydown, true);
+          document.removeEventListener("keyup", handleGlobalKeydown, true);
+
           if (state.intersectionObserver) {
             state.intersectionObserver.disconnect();
             state.intersectionObserver = null;
@@ -1782,6 +1845,10 @@ kbd {
       state.isOverlayVisible = false;
       document.removeEventListener("keydown", handleKeyDown);
       document.removeEventListener("keyup", handleKeyUp);
+      document.removeEventListener("focus", handleGlobalFocus, true);
+      document.removeEventListener("keydown", handleGlobalKeydown, true);
+      document.removeEventListener("keypress", handleGlobalKeydown, true);
+      document.removeEventListener("keyup", handleGlobalKeydown, true);
     }
   }
 
