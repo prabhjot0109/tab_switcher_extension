@@ -750,16 +750,11 @@ async function sendMessageWithRetry(tabId, message, retries = 1) {
 			console.log("[INJECT] Content script not ready, injecting...");
 
 			try {
-				// Inject content script
+				// Inject content script only - CSS is encapsulated in Shadow DOM
+				// DO NOT inject overlay.css here as it would apply global styles to the host page
 				await chrome.scripting.executeScript({
 					target: { tabId },
 					files: ["content.js"],
-				});
-
-				// Inject CSS
-				await chrome.scripting.insertCSS({
-					target: { tabId },
-					files: ["overlay.css"],
 				});
 
 				// Retry after injection

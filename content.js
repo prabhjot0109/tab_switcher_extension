@@ -9,7 +9,13 @@
 
   const SHADOW_HOST_ID = "tab-switcher-host";
   const SHADOW_CSS = `/* Visual Tab Switcher - Modern Glass UI 2.0 */
+/* ============================================================================
+ * SHADOW DOM ENCAPSULATED STYLES
+ * These styles are completely isolated from the host page.
+ * The :host selector resets all inherited styles to prevent any leakage.
+ * ============================================================================ */
 
+/* Reset only within shadow DOM - does NOT affect host page */
 *, *::before, *::after {
   box-sizing: border-box;
   margin: 0;
@@ -17,8 +23,13 @@
 }
 
 :host {
-  all: initial;
+  /* Reset ALL inherited properties to prevent host page styles from leaking in */
+  all: initial !important;
   
+  /* Ensure host doesn't affect page layout */
+  display: contents !important;
+  
+  /* CSS Custom Properties for theming (do not inherit from page) */
   /* Dark Theme - Black & Gray */
   --bg-overlay: rgba(0, 0, 0, 0.85);
   --bg-surface: #121212;
@@ -89,6 +100,8 @@
   color: var(--text-primary);
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+  /* Enable pointer events on the overlay when visible */
+  pointer-events: auto;
 }
 
 .tab-switcher-backdrop {
@@ -827,26 +840,42 @@ kbd:hover {
   function ensureShadowRoot() {
     try {
       if (!state.host || !state.host.isConnected) {
-      state.shadowRoot = null;
-      state.styleElement = null;
-      const existingHost = document.getElementById(SHADOW_HOST_ID);
+        state.shadowRoot = null;
+        state.styleElement = null;
+        const existingHost = document.getElementById(SHADOW_HOST_ID);
         if (existingHost) {
           state.host = existingHost;
         } else {
-        const host = document.createElement("tab-switcher-mount");
-        host.id = SHADOW_HOST_ID;
-        // Fix layout disruption: ensure host is out of flow and doesn't affect page layout
-        // Use !important to override any aggressive site CSS (e.g. global resets)
-        host.style.setProperty("position", "fixed", "important");
-        host.style.setProperty("top", "0", "important");
-        host.style.setProperty("left", "0", "important");
-        host.style.setProperty("width", "0", "important");
-        host.style.setProperty("height", "0", "important");
-        host.style.setProperty("z-index", "2147483647", "important");
-        host.style.setProperty("pointer-events", "none", "important");
-        host.style.setProperty("display", "block", "important");
-        (document.body || document.documentElement).appendChild(host);
-        state.host = host;
+          const host = document.createElement("tab-switcher-mount");
+          host.id = SHADOW_HOST_ID;
+          // CRITICAL: Complete isolation from host page
+          // The host element must be completely out of document flow and invisible
+          // to prevent any impact on the host page's layout
+          host.style.cssText = `
+          all: initial !important;
+          position: fixed !important;
+          top: 0 !important;
+          left: 0 !important;
+          width: 0 !important;
+          height: 0 !important;
+          min-width: 0 !important;
+          min-height: 0 !important;
+          max-width: 0 !important;
+          max-height: 0 !important;
+          margin: 0 !important;
+          padding: 0 !important;
+          border: none !important;
+          overflow: visible !important;
+          z-index: 2147483647 !important;
+          pointer-events: none !important;
+          display: block !important;
+          visibility: visible !important;
+          opacity: 1 !important;
+          contain: layout style !important;
+          isolation: isolate !important;
+        `;
+          (document.body || document.documentElement).appendChild(host);
+          state.host = host;
         }
       }
       if (!state.shadowRoot) {
@@ -1262,8 +1291,7 @@ kbd:hover {
 
     const duration = performance.now() - startTime;
     console.log(
-      `[PERF] Virtual rendered ${endIndex - startIndex} of ${
-        tabs.length
+      `[PERF] Virtual rendered ${endIndex - startIndex} of ${tabs.length
       } tabs in ${duration.toFixed(2)}ms`
     );
   }
@@ -1709,8 +1737,8 @@ kbd:hover {
             : "Type to search web...",
           url: searchQuery
             ? `https://www.google.com/search?q=${encodeURIComponent(
-                searchQuery
-              )}`
+              searchQuery
+            )}`
             : "",
           favIconUrl: "https://www.google.com/favicon.ico",
           isWebSearch: true,
@@ -1726,7 +1754,7 @@ kbd:hover {
         renderTabsStandard(state.filteredTabs);
         return;
       }
-      
+
       // Remove search-mode class when not in web search
       if (state.domCache.grid) {
         state.domCache.grid.classList.remove("search-mode");
@@ -2238,15 +2266,15 @@ kbd:hover {
     try {
       if (!sessionId) return;
       try {
-      chrome.runtime.sendMessage({ action: "restoreSession", sessionId }, () => {
-        if (chrome.runtime.lastError) {
-          console.debug(
-            "[TAB SWITCHER] SW not ready (restoreSession):",
-            chrome.runtime.lastError.message
-          );
-        }
-      });
-    } catch (msgErr) {
+        chrome.runtime.sendMessage({ action: "restoreSession", sessionId }, () => {
+          if (chrome.runtime.lastError) {
+            console.debug(
+              "[TAB SWITCHER] SW not ready (restoreSession):",
+              chrome.runtime.lastError.message
+            );
+          }
+        });
+      } catch (msgErr) {
         console.debug(
           "[TAB SWITCHER] sendMessage warn:",
           msgErr?.message || msgErr
