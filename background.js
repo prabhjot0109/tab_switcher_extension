@@ -942,6 +942,22 @@ async function handleMessage(request, sender, sendResponse) {
 				}
 				break;
 
+			case "toggleMute":
+				if (!request.tabId || typeof request.tabId !== "number") {
+					sendResponse({ success: false, error: "Invalid tab ID" });
+					return;
+				}
+				try {
+					const tab = await chrome.tabs.get(request.tabId);
+					const newMutedStatus = !tab.mutedInfo.muted;
+					await chrome.tabs.update(request.tabId, { muted: newMutedStatus });
+					sendResponse({ success: true, muted: newMutedStatus });
+				} catch (error) {
+					console.error("[ERROR] Failed to toggle mute:", error);
+					sendResponse({ success: false, error: error.message });
+				}
+				break;
+
 			case "refreshTabList":
 				try {
 					await handleShowTabSwitcher();

@@ -574,6 +574,51 @@
   transform: scale(0.95);
 }
 
+/* Mute Button */
+.tab-mute-btn {
+  position: absolute;
+  bottom: 8px;
+  right: 8px;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  background: rgba(0, 0, 0, 0.7);
+  backdrop-filter: blur(4px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: white;
+  z-index: 10;
+  opacity: 0;
+  border: none;
+  cursor: pointer;
+  transition: all var(--transition-fast);
+  box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+}
+
+.tab-card:hover .tab-mute-btn,
+.tab-mute-btn.muted {
+  opacity: 0.9;
+}
+
+.tab-mute-btn:hover {
+  background: var(--bg-surface);
+  color: var(--text-primary);
+  transform: scale(1.1);
+  opacity: 1;
+}
+
+.tab-mute-btn svg {
+  width: 14px;
+  height: 14px;
+  fill: currentColor;
+}
+
+.tab-mute-btn.muted {
+  color: #ff5252;
+  background: rgba(0, 0, 0, 0.8);
+}
+
 /* Footer/Help */
 .tab-switcher-help {
   display: flex;
@@ -998,6 +1043,8 @@ kbd:hover {
     const grid = document.createElement("div");
     grid.className = "tab-switcher-grid";
     grid.id = "tab-switcher-grid";
+    grid.setAttribute("role", "listbox");
+    grid.setAttribute("aria-label", "Open tabs");
     grid.style.transform = "translate3d(0, 0, 0)"; // GPU acceleration
     container.appendChild(grid);
 
@@ -1343,8 +1390,10 @@ kbd:hover {
       tabCard.dataset.searchQuery = tab.searchQuery;
     }
     tabCard.dataset.tabIndex = index;
-    tabCard.setAttribute("role", "button");
-    tabCard.tabIndex = 0; // Make card focusable for accessibility
+    tabCard.setAttribute("role", "option");
+    tabCard.setAttribute("aria-selected", index === state.selectedIndex ? "true" : "false");
+    tabCard.setAttribute("aria-label", `${tab.title} - ${tab.url}`);
+    tabCard.tabIndex = -1; // Managed focus
     tabCard.style.transform = "translate3d(0, 0, 0)"; // GPU acceleration
 
     // Determine if we should show screenshot or favicon
@@ -1372,19 +1421,30 @@ kbd:hover {
     const thumbnail = document.createElement("div");
     thumbnail.className = "tab-thumbnail";
 
-    // Audio Indicator
-    if (tab.audible || (tab.mutedInfo && tab.mutedInfo.muted)) {
-      const audioIndicator = document.createElement("div");
-      audioIndicator.className = "tab-audio-indicator";
-      if (tab.mutedInfo && tab.mutedInfo.muted) {
-        audioIndicator.classList.add("muted");
-        audioIndicator.innerHTML = '<svg viewBox="0 0 24 24"><path d="M16.5 12c0-1.77-1.02-3.29-2.5-4.03v2.21l2.45 2.45c.03-.2.05-.41.05-.63zm2.5 0c0 .94-.2 1.82-.54 2.64l1.51 1.51C20.63 14.91 21 13.5 21 12c0-4.28-2.99-7.86-7-8.77v2.06c2.89.86 5 3.54 5 6.71zM4.27 3L3 4.27 7.73 9H3v6h4l5 5v-6.73l4.25 4.25c-.67.52-1.42.93-2.25 1.18v2.06c1.38-.31 2.63-.95 3.69-1.81L19.73 21 21 19.73 4.27 3zM12 4L9.91 6.09 12 8.18V4z"/></svg>';
-        audioIndicator.title = "Muted";
+    // Audio/Mute Button
+    // Show if audible OR muted OR if we want to allow muting (on hover)
+    // We'll always add the button but hide it via CSS until hover/active
+    if (!tab.sessionId && !tab.isWebSearch) {
+      const muteBtn = document.createElement("button");
+      muteBtn.className = "tab-mute-btn";
+      muteBtn.title = tab.mutedInfo?.muted ? "Unmute tab" : "Mute tab";
+      muteBtn.dataset.action = "mute";
+      muteBtn.dataset.tabId = tab.id;
+
+      if (tab.mutedInfo?.muted) {
+        muteBtn.classList.add("muted");
+        muteBtn.innerHTML = '<svg viewBox="0 0 24 24"><path d="M16.5 12c0-1.77-1.02-3.29-2.5-4.03v2.21l2.45 2.45c.03-.2.05-.41.05-.63zm2.5 0c0 .94-.2 1.82-.54 2.64l1.51 1.51C20.63 14.91 21 13.5 21 12c0-4.28-2.99-7.86-7-8.77v2.06c2.89.86 5 3.54 5 6.71zM4.27 3L3 4.27 7.73 9H3v6h4l5 5v-6.73l4.25 4.25c-.67.52-1.42.93-2.25 1.18v2.06c1.38-.31 2.63-.95 3.69-1.81L19.73 21 21 19.73 4.27 3zM12 4L9.91 6.09 12 8.18V4z"/></svg>';
       } else {
-        audioIndicator.innerHTML = '<svg viewBox="0 0 24 24"><path d="M3 9v6h4l5 5V4L7 9H3zm13.5 3c0-1.77-1.02-3.29-2.5-4.03v8.05c1.48-.73 2.5-2.25 2.5-4.02zM14 3.23v2.06c2.89.86 5 3.54 5 6.71s-2.11 5.85-5 6.71v2.06c4.01-.91 7-4.49 7-8.77s-2.99-7.86-7-8.77z"/></svg>';
-        audioIndicator.title = "Playing Audio";
+        // If not muted, show volume icon if audible, otherwise show volume icon on hover
+        muteBtn.innerHTML = '<svg viewBox="0 0 24 24"><path d="M3 9v6h4l5 5V4L7 9H3zm13.5 3c0-1.77-1.02-3.29-2.5-4.03v8.05c1.48-.73 2.5-2.25 2.5-4.02zM14 3.23v2.06c2.89.86 5 3.54 5 6.71s-2.11 5.85-5 6.71v2.06c4.01-.91 7-4.49 7-8.77s-2.99-7.86-7-8.77z"/></svg>';
+        // Only show persistently if audible
+        if (tab.audible) {
+          muteBtn.style.opacity = "0.9";
+        }
       }
-      thumbnail.appendChild(audioIndicator);
+
+      // Stop propagation on click is handled in delegation
+      thumbnail.appendChild(muteBtn);
     }
 
     if (tab.sessionId) {
@@ -1512,11 +1572,21 @@ kbd:hover {
 
         if (tabId && !Number.isNaN(tabId)) {
           closeTab(tabId, index);
-        } else {
-          console.error(
-            "[TAB SWITCHER] Invalid tab ID in close button:",
-            target
-          );
+        }
+        return;
+      }
+
+      // Handle mute button
+      if (
+        target.dataset.action === "mute" ||
+        target.closest(".tab-mute-btn")
+      ) {
+        e.stopPropagation();
+        const btn = target.closest(".tab-mute-btn");
+        const tabId = parseInt(btn.dataset.tabId);
+
+        if (tabId && !Number.isNaN(tabId)) {
+          toggleMute(tabId, btn);
         }
         return;
       }
@@ -2229,13 +2299,22 @@ kbd:hover {
       if (!grid) return;
       // Remove any stale selections currently in DOM
       const selectedEls = grid.querySelectorAll(".tab-card.selected");
-      selectedEls.forEach((el) => { el.classList.remove("selected"); });
+      selectedEls.forEach((el) => {
+        el.classList.remove("selected");
+        el.setAttribute("aria-selected", "false");
+      });
       // Apply selection to the current index if present in DOM
       const target = grid.querySelector(
         `.tab-card[data-tab-index="${state.selectedIndex}"]`
       );
       if (!target) return;
       target.classList.add("selected");
+      target.setAttribute("aria-selected", "true");
+
+      // Update active descendant for screen readers
+      grid.setAttribute("aria-activedescendant", target.id || `tab-card-${state.selectedIndex}`);
+      if (!target.id) target.id = `tab-card-${state.selectedIndex}`;
+
       if (scrollIntoView) {
         requestAnimationFrame(() => {
           target.scrollIntoView({
@@ -2422,6 +2501,47 @@ kbd:hover {
       );
     } catch (error) {
       console.error("[TAB SWITCHER] Exception in closeTab:", error);
+    }
+  }
+
+  function toggleMute(tabId, btnElement) {
+    try {
+      if (!tabId) return;
+
+      chrome.runtime.sendMessage(
+        { action: "toggleMute", tabId },
+        (response) => {
+          if (chrome.runtime.lastError) {
+            console.error("[TAB SWITCHER] Error toggling mute:", chrome.runtime.lastError);
+            return;
+          }
+
+          if (response && response.success) {
+            // Update UI immediately
+            const isMuted = response.muted;
+
+            // Update button state
+            if (isMuted) {
+              btnElement.classList.add("muted");
+              btnElement.title = "Unmute tab";
+              btnElement.innerHTML = '<svg viewBox="0 0 24 24"><path d="M16.5 12c0-1.77-1.02-3.29-2.5-4.03v2.21l2.45 2.45c.03-.2.05-.41.05-.63zm2.5 0c0 .94-.2 1.82-.54 2.64l1.51 1.51C20.63 14.91 21 13.5 21 12c0-4.28-2.99-7.86-7-8.77v2.06c2.89.86 5 3.54 5 6.71zM4.27 3L3 4.27 7.73 9H3v6h4l5 5v-6.73l4.25 4.25c-.67.52-1.42.93-2.25 1.18v2.06c1.38-.31 2.63-.95 3.69-1.81L19.73 21 21 19.73 4.27 3zM12 4L9.91 6.09 12 8.18V4z"/></svg>';
+            } else {
+              btnElement.classList.remove("muted");
+              btnElement.title = "Mute tab";
+              btnElement.innerHTML = '<svg viewBox="0 0 24 24"><path d="M3 9v6h4l5 5V4L7 9H3zm13.5 3c0-1.77-1.02-3.29-2.5-4.03v8.05c1.48-.73 2.5-2.25 2.5-4.02zM14 3.23v2.06c2.89.86 5 3.54 5 6.71s-2.11 5.85-5 6.71v2.06c4.01-.91 7-4.49 7-8.77s-2.99-7.86-7-8.77z"/></svg>';
+            }
+
+            // Update internal state
+            const tab = state.currentTabs.find(t => t.id === tabId);
+            if (tab) {
+              if (!tab.mutedInfo) tab.mutedInfo = {};
+              tab.mutedInfo.muted = isMuted;
+            }
+          }
+        }
+      );
+    } catch (error) {
+      console.error("[TAB SWITCHER] Exception in toggleMute:", error);
     }
   }
 
