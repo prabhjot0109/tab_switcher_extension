@@ -709,6 +709,8 @@ async function handleShowTabSwitcher() {
 				pinned: tab.pinned,
 				index: tab.index,
 				active: tab.active,
+				audible: tab.audible,
+				mutedInfo: tab.mutedInfo,
 			};
 		});
 
