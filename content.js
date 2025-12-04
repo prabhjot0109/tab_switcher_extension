@@ -1136,6 +1136,9 @@ kbd:hover {
 				state.overlay.style.opacity = "1";
 				state.isOverlayVisible = true;
 
+				// Blur any focused page elements to prevent them from receiving input
+				blurPageElements();
+
 				// Focus search box AFTER overlay is visible (critical for auto-focus)
 				setTimeout(() => {
 					state.domCache.searchBox.value = "";
@@ -1149,10 +1152,16 @@ kbd:hover {
 		document.addEventListener("keyup", handleKeyUp);
 
 		// Aggressive Focus Enforcement: Prevent page from stealing focus or receiving keys
+		// Using capture phase (true) to intercept events before they reach page elements
 		document.addEventListener("focus", handleGlobalFocus, true);
+		document.addEventListener("focusin", handleGlobalFocusIn, true);
 		document.addEventListener("keydown", handleGlobalKeydown, true);
 		document.addEventListener("keypress", handleGlobalKeydown, true);
 		document.addEventListener("keyup", handleGlobalKeydown, true);
+		document.addEventListener("input", handleGlobalInput, true);
+		document.addEventListener("beforeinput", handleGlobalInput, true);
+		document.addEventListener("click", handleGlobalClick, true);
+		document.addEventListener("mousedown", handleGlobalClick, true);
 
 		const duration = performance.now() - startTime;
 		console.log(
@@ -2085,15 +2094,56 @@ kbd:hover {
 	// FOCUS & EVENT CAPTURE (PREVENT TYPING ON PAGE)
 	// ============================================================================
 
+	// Blur all focusable elements on the page to prevent them from receiving input
+	function blurPageElements() {
+		try {
+			// Blur the currently focused element if it's not our extension
+			if (document.activeElement && document.activeElement !== document.body && document.activeElement !== state.host) {
+				document.activeElement.blur();
+			}
+			
+			// Also try to blur any iframes' active elements
+			const iframes = document.querySelectorAll('iframe');
+			iframes.forEach(iframe => {
+				try {
+					if (iframe.contentDocument?.activeElement) {
+						iframe.contentDocument.activeElement.blur();
+					}
+				} catch {
+					// Cross-origin iframe, can't access
+				}
+			});
+		} catch (error) {
+			console.debug('[TAB SWITCHER] Error blurring page elements:', error);
+		}
+	}
+
+	// Check if an event target is inside our shadow DOM
+	function isEventFromOurExtension(e) {
+		// Check if the target is our shadow host
+		if (e.target === state.host) return true;
+		
+		// Check if target is inside our shadow root using composedPath
+		const path = e.composedPath ? e.composedPath() : [];
+		return path.some(el => el === state.host || el === state.shadowRoot || el === state.overlay);
+	}
+
 	function handleGlobalFocus(e) {
 		if (!state.isOverlayVisible) return;
 
 		// If focus moves to something other than our host (shadow host), force it back.
 		// When focus is inside Shadow DOM, document.activeElement is the host.
 		// If e.target is NOT the host, it means focus went to a page element.
-		if (e.target !== state.host) {
+		if (!isEventFromOurExtension(e)) {
 			e.stopPropagation();
+			e.stopImmediatePropagation();
 			e.preventDefault();
+			
+			// Blur the element that tried to steal focus
+			if (e.target && typeof e.target.blur === 'function') {
+				e.target.blur();
+			}
+			
 			if (state.domCache?.searchBox) {
 				state.domCache.searchBox.focus();
 			}
@@ -2103,32 +2153,77 @@ kbd:hover {
 	function handleGlobalKeydown(e) {
 		if (!state.isOverlayVisible) return;
 
-		// If the event target is NOT inside our shadow root (or is the host),
-		// it means the event is targeting the page body/inputs.
-		// We must stop it from reaching the page, but allow it if it's bubbling up from our shadow DOM.
-
-		// However, since we are capturing at window level:
-		// If we stop propagation here, it won't reach our shadow DOM either if we are not careful.
-		// BUT, if focus is correctly on our search box, the event path starts at search box.
-		// The capture phase goes Window -> ... -> Host -> SearchBox.
-		// If we stop at Window Capture, we kill it for everyone.
-
-		// Strategy: Only stop if the target is NOT our host/shadow content.
-		// But at Window Capture, e.target is the *intended* target.
-		// If focus is on the page input, e.target is the page input. We want to BLOCK that.
-		// If focus is on our search box, e.target is our host (from document perspective) or search box (from shadow perspective).
-		// Actually, for events originating in Shadow DOM, e.target is retargeted to the host.
-
-		if (e.target !== state.host) {
-			// Target is outside our extension. Block it.
+		// Always block events that don't originate from our extension
+		if (!isEventFromOurExtension(e)) {
+			// Target is outside our extension. Block it completely.
 			e.stopPropagation();
+			e.stopImmediatePropagation();
 			e.preventDefault();
 
-			// Redirect key to our search box if it's a printable char or nav key?
-			// Better: Just enforce focus. The user will have to type again, but at least it won't type on the page.
+			// Force focus back to our search box
+			if (state.domCache?.searchBox) {
+				state.domCache.searchBox.focus();
+				
+				// For printable characters, manually add them to the search box
+				// This prevents losing the keystroke when focus wasn't on our input
+				if (e.key && e.key.length === 1 && !e.ctrlKey && !e.altKey && !e.metaKey) {
+					const searchBox = state.domCache.searchBox;
+					const start = searchBox.selectionStart || 0;
+					const end = searchBox.selectionEnd || 0;
+					const value = searchBox.value;
+					searchBox.value = value.slice(0, start) + e.key + value.slice(end);
+					searchBox.setSelectionRange(start + 1, start + 1);
+					// Trigger input event so search updates
+					searchBox.dispatchEvent(new Event('input', { bubbles: true }));
+				}
+			}
+			return;
+		}
+	}
+
+	// Block input/beforeinput events that target page elements
+	function handleGlobalInput(e) {
+		if (!state.isOverlayVisible) return;
+
+		if (!isEventFromOurExtension(e)) {
+			e.stopPropagation();
+			e.stopImmediatePropagation();
+			e.preventDefault();
+			
 			if (state.domCache?.searchBox) {
 				state.domCache.searchBox.focus();
 			}
+		}
+	}
+
+	// Block focus attempts on page elements
+	function handleGlobalFocusIn(e) {
+		if (!state.isOverlayVisible) return;
+
+		if (!isEventFromOurExtension(e)) {
+			e.stopPropagation();
+			e.stopImmediatePropagation();
+			e.preventDefault();
+			
+			// Blur the element that received focus
+			if (e.target && typeof e.target.blur === 'function') {
+				e.target.blur();
+			}
+			
+			if (state.domCache?.searchBox) {
+				state.domCache.searchBox.focus();
+			}
+		}
+	}
+
+	// Block click events on page elements when overlay is visible
+	function handleGlobalClick(e) {
+		if (!state.isOverlayVisible) return;
+
+		if (!isEventFromOurExtension(e)) {
+			e.stopPropagation();
+			e.stopImmediatePropagation();
+			e.preventDefault();
 		}
 	}
 
@@ -2585,9 +2680,14 @@ kbd:hover {
 
 					// Remove focus enforcement listeners
 					document.removeEventListener("focus", handleGlobalFocus, true);
+					document.removeEventListener("focusin", handleGlobalFocusIn, true);
 					document.removeEventListener("keydown", handleGlobalKeydown, true);
 					document.removeEventListener("keypress", handleGlobalKeydown, true);
 					document.removeEventListener("keyup", handleGlobalKeydown, true);
+					document.removeEventListener("input", handleGlobalInput, true);
+					document.removeEventListener("beforeinput", handleGlobalInput, true);
+					document.removeEventListener("click", handleGlobalClick, true);
+					document.removeEventListener("mousedown", handleGlobalClick, true);
 
 					if (state.intersectionObserver) {
 						state.intersectionObserver.disconnect();
@@ -2602,9 +2702,14 @@ kbd:hover {
 			document.removeEventListener("keydown", handleKeyDown);
 			document.removeEventListener("keyup", handleKeyUp);
 			document.removeEventListener("focus", handleGlobalFocus, true);
+			document.removeEventListener("focusin", handleGlobalFocusIn, true);
 			document.removeEventListener("keydown", handleGlobalKeydown, true);
 			document.removeEventListener("keypress", handleGlobalKeydown, true);
 			document.removeEventListener("keyup", handleGlobalKeydown, true);
+			document.removeEventListener("input", handleGlobalInput, true);
+			document.removeEventListener("beforeinput", handleGlobalInput, true);
+			document.removeEventListener("click", handleGlobalClick, true);
+			document.removeEventListener("mousedown", handleGlobalClick, true);
 		}
 	}
 
