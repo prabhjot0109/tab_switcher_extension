@@ -431,37 +431,4 @@ export async function switchToRecent() {
   if (state.domCache.searchBox) state.domCache.searchBox.focus();
 }
 
-export function toggleGroupCollapse(groupId: number) {
-  if (!groupId) return;
-
-  if (state.collapsedGroups.has(groupId)) {
-    state.collapsedGroups.delete(groupId);
-  } else {
-    state.collapsedGroups.add(groupId);
-  }
-
-  // We need to strip existing headers first if we are re-transforming `filteredTabs`.
-  // If we are in search, we might not want to group?
-  // Let's assume we operate on state.activeTabs if we are in active mode,
-  // or just re-transform current filtered set if it makes sense.
-  // Ideally, we take the BASE active tabs and re-filter + re-transform.
-  // But strictly toggleGroupCollapse should probably just re-render Active View.
-
-  // Reuse switchToActive logic but preserve selection?
-  // Custom logic:
-
-  const rawTabs = state.currentTabs; // Assuming currentTabs is the source of truth (without headers)
-  // Wait, does state.currentTabs contain headers?
-  // switchToActive sets state.currentTabs = state.activeTabs (raw).
-  // Then sets filteredTabs = transformed.
-  // So currentTabs should be raw.
-
-  const newTabs = applyGroupViewTransformation(rawTabs);
-  state.filteredTabs = newTabs;
-
-  if (newTabs.length > 50) {
-    renderTabsVirtual(newTabs);
-  } else {
-    renderTabsStandard(newTabs);
-  }
-}
+// toggleGroupCollapse removed as headers/collapsing are no longer used

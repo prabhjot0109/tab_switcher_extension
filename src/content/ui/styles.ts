@@ -244,8 +244,8 @@ export const SHADOW_CSS = `/* Visual Tab Switcher - Modern Glass UI 2.0 */
   gap: 14px;
   overflow-y: auto;
   overflow-x: hidden;
-  padding: 4px;
-  padding-right: 8px;
+  /* Extra vertical padding to allow space for the "selection lift/scale" without cropping */
+  padding: 16px 14px;
   min-height: 200px;
   scroll-behavior: smooth;
 }
@@ -342,18 +342,30 @@ export const SHADOW_CSS = `/* Visual Tab Switcher - Modern Glass UI 2.0 */
 }
 
 .tab-card.selected {
-  border-color: var(--accent);
-  background: var(--card-selected);
-  box-shadow: 0 0 0 2px var(--accent-glow), 0 4px 16px rgba(0, 0, 0, 0.2);
+  border-color: var(--accent) !important;
+  border-width: 2px !important;
+  background: var(--card-selected) !important;
+  /* More prominent glow and depth */
+  box-shadow: 0 0 0 3px var(--accent-glow), 0 12px 32px rgba(0, 0, 0, 0.35) !important;
+  /* Slight lift and scale to stand out spatially */
+  transform: translateY(-6px) scale(1.03) !important;
+  z-index: 50 !important;
 }
 
 .tab-card.selected::before {
   content: '';
   position: absolute;
   inset: 0;
-  background: var(--accent-glow);
+  /* Subtle inner glow to distinguish from background */
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.08) 0%, transparent 100%);
   pointer-events: none;
   z-index: 0;
+  animation: selection-pulse 2s infinite alternate ease-in-out;
+}
+
+@keyframes selection-pulse {
+  from { opacity: 0.4; }
+  to { opacity: 0.8; }
 }
 
 /* Pinned indicator */
@@ -439,9 +451,10 @@ export const SHADOW_CSS = `/* Visual Tab Switcher - Modern Glass UI 2.0 */
   transition: all var(--transition-smooth);
 }
 
-.tab-card:hover .screenshot-img {
+.tab-card:hover .screenshot-img,
+.tab-card.selected .screenshot-img {
   opacity: 1;
-  transform: scale(1.02);
+  transform: scale(1.04);
 }
 
 /* Favicon Tile */
@@ -491,9 +504,11 @@ export const SHADOW_CSS = `/* Visual Tab Switcher - Modern Glass UI 2.0 */
   transition: all var(--transition-smooth);
 }
 
-.tab-card:hover .favicon-letter {
-  transform: scale(1.05);
-  border-color: var(--border-hover);
+.tab-card:hover .favicon-letter,
+.tab-card.selected .favicon-letter {
+  transform: scale(1.08);
+  border-color: var(--accent);
+  background: var(--bg-glass-hover);
 }
 
 /* Tab Info */
@@ -543,7 +558,8 @@ export const SHADOW_CSS = `/* Visual Tab Switcher - Modern Glass UI 2.0 */
 }
 
 .tab-card.selected .tab-title {
-  color: var(--accent-light);
+  color: var(--text-primary);
+  font-weight: 700;
 }
 
 .tab-card[data-web-search="1"] .tab-title {
@@ -1014,173 +1030,5 @@ kbd:hover {
     gap: 8px;
 }
 
-/* ============================================================================
- * GROUP HEADER CARD - Tab Group Toggle Cards
- * These cards show the group name and allow expanding/collapsing tab groups.
- * Styled with explicit !important to ensure consistency across all websites.
- * ============================================================================ */
-
-.tab-card.group-header-card {
-  /* Override default card sizing - span full width */
-  grid-column: 1 / -1 !important;
-  width: 100% !important;
-  height: 56px !important;
-  min-height: 56px !important;
-  max-height: 56px !important;
-  
-  /* Explicit flexbox layout */
-  display: flex !important;
-  flex-direction: row !important;
-  align-items: center !important;
-  justify-content: flex-start !important;
-  
-  /* Padding and gaps */
-  padding: 0 !important;
-  margin: 0 !important;
-  gap: 0 !important;
-  
-  /* Appearance */
-  border-radius: var(--radius-lg) !important;
-  cursor: pointer !important;
-  overflow: hidden !important;
-  
-  /* Ensure proper stacking */
-  position: relative !important;
-  z-index: 1 !important;
-  
-  /* Transition for hover effects */
-  transition: all var(--transition-smooth) !important;
-}
-
-.tab-card.group-header-card:hover {
-  transform: translateY(-2px) !important;
-  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.25) !important;
-}
-
-.tab-card.group-header-card.selected {
-  box-shadow: 0 0 0 2px var(--accent-glow), 0 4px 16px rgba(0, 0, 0, 0.2) !important;
-}
-
-/* Group Header Content Container */
-.group-header-content {
-  display: flex !important;
-  align-items: center !important;
-  justify-content: space-between !important;
-  width: 100% !important;
-  height: 100% !important;
-  padding: 0 20px !important;
-  box-sizing: border-box !important;
-}
-
-/* Group Header Left Side - Title and Count */
-.group-header-left {
-  display: flex !important;
-  align-items: center !important;
-  gap: 12px !important;
-  min-width: 0 !important;
-  flex: 1 !important;
-}
-
-.group-header-title {
-  font-weight: 600 !important;
-  font-size: 15px !important;
-  color: var(--text-primary) !important;
-  white-space: nowrap !important;
-  overflow: hidden !important;
-  text-overflow: ellipsis !important;
-  letter-spacing: -0.01em !important;
-  margin: 0 !important;
-  padding: 0 !important;
-  line-height: 1.4 !important;
-}
-
-.group-header-count {
-  font-size: 13px !important;
-  font-weight: 400 !important;
-  color: var(--text-secondary) !important;
-  opacity: 0.7 !important;
-  white-space: nowrap !important;
-  margin: 0 !important;
-  padding: 0 !important;
-  line-height: 1.4 !important;
-}
-
-/* Group Header Right Side - State and Chevron */
-.group-header-right {
-  display: flex !important;
-  align-items: center !important;
-  gap: 12px !important;
-  flex-shrink: 0 !important;
-}
-
-.group-header-state {
-  font-size: 12px !important;
-  font-weight: 500 !important;
-  text-transform: uppercase !important;
-  letter-spacing: 0.5px !important;
-  opacity: 0.9 !important;
-  margin: 0 !important;
-  padding: 0 !important;
-  line-height: 1.4 !important;
-}
-
-.group-header-chevron {
-  display: flex !important;
-  align-items: center !important;
-  justify-content: center !important;
-  width: 24px !important;
-  height: 24px !important;
-  color: currentColor !important;
-  opacity: 0.8 !important;
-  transition: transform var(--transition-fast) !important;
-}
-
-.group-header-chevron svg {
-  width: 20px !important;
-  height: 20px !important;
-  stroke: currentColor !important;
-  fill: none !important;
-}
-
-.tab-card.group-header-card:hover .group-header-chevron {
-  opacity: 1 !important;
-}
-
-/* Collapsed state rotation */
-.tab-card.group-header-card[data-collapsed="true"] .group-header-chevron {
-  transform: rotate(-90deg) !important;
-}
-
-/* Hide default tab-card elements that don't apply to group headers */
-.tab-card.group-header-card .tab-thumbnail,
-.tab-card.group-header-card .tab-info,
-.tab-card.group-header-card .tab-close-btn,
-.tab-card.group-header-card .tab-mute-btn {
-  display: none !important;
-}
-
-/* Responsive adjustments for group headers */
-@media (max-width: 768px) {
-  .tab-card.group-header-card {
-    height: 48px !important;
-    min-height: 48px !important;
-    max-height: 48px !important;
-  }
-  
-  .group-header-content {
-    padding: 0 16px !important;
-  }
-  
-  .group-header-title {
-    font-size: 14px !important;
-  }
-  
-  .group-header-count {
-    font-size: 12px !important;
-  }
-  
-  .group-header-state {
-    font-size: 11px !important;
-  }
-}
+/* GROUP HEADER CARD styles removed - headers are no longer used */
 `;

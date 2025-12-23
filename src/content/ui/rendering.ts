@@ -5,7 +5,6 @@ import {
   toggleMute,
   restoreSession,
   closeTab,
-  toggleGroupCollapse, // We will add this to actions.ts
 } from "../actions";
 
 // ============================================================================
@@ -121,11 +120,6 @@ export function renderTabsVirtual(tabs: Tab[]) {
 // CREATE TAB CARD
 // ============================================================================
 export function createTabCard(tab: Tab, index: number) {
-  // SPECIAL HANDLE: GROUP HEADER
-  if (tab.isGroupHeader) {
-    return createGroupHeaderCard(tab, index);
-  }
-
   const tabCard = document.createElement("div");
   tabCard.className = "tab-card";
   if (tab && typeof tab.id === "number") {
@@ -171,16 +165,21 @@ export function createTabCard(tab: Tab, index: number) {
   }
 
   // Tab Groups Support (Visuals for item)
-  let groupColor = null;
-  let groupTitle = "";
   if (tab.groupId && tab.groupId !== -1 && state.groups) {
     const group = state.groups.find((g) => g.id === tab.groupId);
     if (group) {
-      groupColor = getGroupColor(group.color);
-      groupTitle = group.title || "Group";
+      const groupColor = getGroupColor(group.color);
+      const groupTitle = group.title || "Group";
       tabCard.dataset.groupId = String(group.id);
-      // We still show the border for members even if grouped, for clarity
-      tabCard.style.borderLeft = `4px solid ${groupColor}`;
+
+      // More prominent group indicator: thicker border and subtle background tint
+      tabCard.style.borderLeft = `6px solid ${groupColor}`;
+      // Add a very subtle gradient that fades from the group color
+      tabCard.style.background = `linear-gradient(to right, ${groupColor}15, rgba(255,255,255,0.02))`;
+
+      // Store group info for later if needed (though we'll use it in header.appendChild(pill) below)
+      (tab as any)._groupColor = groupColor;
+      (tab as any)._groupTitle = groupTitle;
     }
   }
 
@@ -278,20 +277,20 @@ export function createTabCard(tab: Tab, index: number) {
   title.title = tab.title;
   header.appendChild(title);
 
-  // Note: We deliberately do NOT show the group pill here anymore if we have headers,
-  // to reduce clutter, OR we allow it as a secondary indicator.
-  // Let's keep it for now as it's useful context if headers are scrolled away.
-  if (groupColor) {
+  // Secondary group indicator: small pill in the header
+  const gColor = (tab as any)._groupColor;
+  const gTitle = (tab as any)._groupTitle;
+  if (gColor) {
     const pill = document.createElement("span");
     pill.className = "group-pill";
-    pill.textContent = groupTitle;
-    pill.style.backgroundColor = groupColor;
-    pill.style.opacity = "0.3";
-    pill.style.color = "#202124";
+    pill.textContent = gTitle;
+    pill.style.backgroundColor = gColor;
+    pill.style.opacity = "0.4"; // Slightly more opaque
+    pill.style.color = "white"; // White text for better contrast on colors
     pill.style.fontSize = "10px";
-    pill.style.fontWeight = "600";
+    pill.style.fontWeight = "700"; // Bolder
     pill.style.padding = "2px 6px";
-    pill.style.borderRadius = "4px";
+    pill.style.borderRadius = "40px"; // Pill shape
     pill.style.marginLeft = "8px";
     pill.style.alignSelf = "center";
     pill.style.whiteSpace = "nowrap";
@@ -325,81 +324,7 @@ export function createTabCard(tab: Tab, index: number) {
   return tabCard;
 }
 
-function createGroupHeaderCard(tab: Tab, index: number) {
-  const container = document.createElement("div");
-  container.className = "tab-card group-header-card";
-  const groupId = tab.groupId ?? -1;
-  const groupIdStr = String(groupId);
-  container.dataset.groupId = groupIdStr;
-  container.dataset.tabIndex = String(index);
-
-  const isCollapsed = groupId !== -1 && state.collapsedGroups.has(groupId);
-  container.dataset.collapsed = isCollapsed ? "true" : "false";
-
-  // Apply dynamic group color via inline style (only dynamic part)
-  const color = tab.groupColor || "var(--border-subtle)";
-  container.style.setProperty("--group-color", color);
-  container.style.borderLeft = `6px solid ${color}`;
-  container.style.border = `1px solid ${color}44`;
-  container.style.borderLeftWidth = "6px";
-  container.style.background = `linear-gradient(to right, ${color}33, ${color}08)`;
-
-  if (index === state.selectedIndex) {
-    container.classList.add("selected");
-  }
-
-  // Content container - uses CSS class for layout
-  const content = document.createElement("div");
-  content.className = "group-header-content";
-
-  // LEFT SIDE: Title + Count - uses CSS classes
-  const left = document.createElement("div");
-  left.className = "group-header-left";
-
-  const title = document.createElement("span");
-  title.className = "group-header-title";
-  title.textContent = tab.groupTitle || "Untitled Group";
-
-  const countBadge = document.createElement("span");
-  countBadge.className = "group-header-count";
-  const count = state.currentTabs.filter((t) => t.groupId === groupId).length;
-  countBadge.textContent = `(${count} tabs)`;
-
-  left.appendChild(title);
-  left.appendChild(countBadge);
-
-  // RIGHT SIDE: State Text + Chevron - uses CSS classes
-  const right = document.createElement("div");
-  right.className = "group-header-right";
-
-  const stateText = document.createElement("span");
-  stateText.className = "group-header-state";
-  stateText.textContent = isCollapsed ? "Collapsed" : "Expanded";
-  stateText.style.color = color; // Dynamic color for state text
-
-  const chevron = document.createElement("span");
-  chevron.className = "group-header-chevron";
-  // Always use down chevron - CSS handles rotation for collapsed state
-  chevron.innerHTML =
-    '<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>';
-
-  right.appendChild(stateText);
-  right.appendChild(chevron);
-
-  content.appendChild(left);
-  content.appendChild(right);
-  container.appendChild(content);
-
-  // Click handler
-  container.onclick = (e) => {
-    e.stopPropagation();
-    if (groupId !== -1) {
-      toggleGroupCollapse(groupId);
-    }
-  };
-
-  return container;
-}
+// createGroupHeaderCard removed as it's no longer used
 
 // Create favicon tile - simple approach using Chrome's favicon API
 export function createFaviconTile(tab: Tab) {
@@ -444,63 +369,10 @@ export function createFaviconTile(tab: Tab) {
 }
 
 export function applyGroupViewTransformation(tabs: Tab[]): Tab[] {
-  if (!state.groups || state.groups.length === 0) return tabs;
-
-  const result: Tab[] = [];
-  const seenGroups = new Set<number>();
-
-  // STEP 1: First, identify all groups that have tabs in the current list
-  // This ensures we show ALL group headers, not just the ones whose tabs appear early
-  const groupsWithTabs = new Map<number, Tab[]>();
-  for (const tab of tabs) {
-    if (tab.groupId && tab.groupId !== -1) {
-      if (!groupsWithTabs.has(tab.groupId)) {
-        groupsWithTabs.set(tab.groupId, []);
-      }
-      groupsWithTabs.get(tab.groupId)!.push(tab);
-    }
-  }
-
-  // STEP 2: Add ALL group headers at the top of the result first
-  // This ensures group headers are ALWAYS visible by default, regardless of tab access order
-  for (const [groupId, members] of groupsWithTabs) {
-    if (seenGroups.has(groupId)) continue;
-    seenGroups.add(groupId);
-
-    const group = state.groups.find((g) => g.id === groupId);
-    const groupColor = group
-      ? getGroupColor(group.color)
-      : "var(--border-subtle)";
-    const groupTitle = group?.title || "Group";
-
-    // Add Group Header
-    const header: Tab = {
-      id: -1 * groupId, // Negative ID to avoid collision
-      isGroupHeader: true,
-      groupId: groupId,
-      groupColor: groupColor,
-      groupTitle: groupTitle,
-      title: groupTitle,
-      url: "",
-      active: false,
-    };
-    result.push(header);
-
-    // Add Group Members (unless collapsed)
-    const isCollapsed = state.collapsedGroups.has(groupId);
-    if (!isCollapsed) {
-      result.push(...members);
-    }
-  }
-
-  // STEP 3: Add ungrouped tabs after all groups
-  for (const tab of tabs) {
-    if (!tab.groupId || tab.groupId === -1) {
-      result.push(tab);
-    }
-  }
-
-  return result;
+  // We no longer cluster tabs by group, as the user wants the MRU order from the background
+  // script to be preserved ("listed as per recent opened").
+  // Group colors are still rendered on the individual tab cards.
+  return tabs;
 }
 
 export function enforceSingleSelection(scrollIntoView) {
