@@ -114,7 +114,7 @@
   position: relative;
   width: 750px;
   max-width: 94vw;
-  max-height: 75vh;
+  max-height: 68vh;
   background: var(--bg-surface);
   border: 1px solid var(--border-subtle);
   border-radius: var(--radius-3xl);
@@ -225,7 +225,7 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 2px 16px;
+  padding: 10px 16px 2px 16px;
   flex-shrink: 0;
 }
 
