@@ -1,6 +1,5 @@
 # Extension files
 *.crx
-*.pem
 *.zip
 
 node_modules
@@ -16,21 +15,28 @@ Thumbs.db
 *.log
 npm-debug.log*
 
-# OS
-.DS_Store
-.AppleDouble
-.LSOverride
-Icon
-._*
-
-# Windows
-Thumbs.db
-ehthumbs.db
-Desktop.ini
-$RECYCLE.BIN/
-
 # Backup files
 *~
 *.bak
 *.swp
 *.swo
+
+# Chrome Web store keys
+*.pem
+key.pem
+
+# Build output
+dist/
+
+# TypeScript build info
+*.tsbuildinfo
+
+# Test coverage
+coverage/
+
+# Environment variables
+.env*
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
