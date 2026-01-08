@@ -2,7 +2,7 @@
 
 ![Extension Preview](./preview.png)
 
-[![Version](https://img.shields.io/badge/version-1.1.0-blue.svg)](https://github.com/prabhjot0109/tab_flow/releases)
+[![Version](https://img.shields.io/badge/version-1.1.0-blue.svg)](https://github.com/prabhjot0109/TabFlow/releases)
 [![License](https://img.shields.io/badge/license-MIT-green.svg)](./LICENSE)
 [![Chrome](https://img.shields.io/badge/platform-Chrome%20%7C%20Edge%20%7C%20Brave-grey.svg)](#installation)
 
@@ -74,8 +74,8 @@ The extension will be available on the Chrome Web Store soon. Star this repo to 
 1. **Grab the code:**
 
    ```bash
-   git clone https://github.com/prabhjot0109/tab_flow.git
-   cd tab_flow
+   git clone https://github.com/prabhjot0109/TabFlow.git
+   cd TabFlow
    ```
 
 2. **Install dependencies and build:**

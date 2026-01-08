@@ -4,7 +4,7 @@
   "short_name": "Tab Flow",
   "version": "1.1.0",
   "description": "A visual Tab Flow with thumbnail previews - navigate tabs with keyboard shortcuts, mouse clicks, or arrow keys",
-  "homepage_url": "https://github.com/prabhjot0109/tab_flow",
+  "homepage_url": "https://github.com/prabhjot0109/TabFlow",
   "content_security_policy": {
     "extension_pages": "script-src 'self'; object-src 'self';"
   },

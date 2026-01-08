@@ -88,14 +88,14 @@ If we make changes to this privacy policy, we will update the "Last Updated" dat
 ## Open Source
 
 Tab Flow is open source. You can review the complete source code at:
-https://github.com/prabhjot0109/tab_flow
+https://github.com/prabhjot0109/TabFlow
 
 This transparency ensures you can verify exactly what the extension does with your data.
 
 ## Contact
 
 If you have questions about this privacy policy or Tab Flow's data practices, please open an issue on our GitHub repository:
-https://github.com/prabhjot0109/tab_flow/issues
+https://github.com/prabhjot0109/TabFlow/issues
 
 ---
 
