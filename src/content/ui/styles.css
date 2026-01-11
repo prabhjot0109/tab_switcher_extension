@@ -1300,6 +1300,161 @@ kbd:hover {
   }
 }
 
+/* ============================================================================
+ * QUICK SWITCH MODE (Alt+W) - Alt+Tab Style
+ * Minimal overlay without search bar for fast tab switching
+ * ============================================================================ */
 
+.tab-flow-overlay.quick-switch-mode .tab-flow-container {
+  width: 650px;
+  max-width: 92vw;
+  max-height: min(70vh, 560px);
+}
 
+.quick-switch-container {
+  padding: 0 !important;
+}
 
+.quick-switch-container .tab-flow-section-header {
+  padding: 16px 20px 12px;
+  margin: 0;
+}
+
+.quick-switch-container .tab-flow-section-title {
+  font-size: 14px;
+  font-weight: 600;
+}
+
+/* Quick switch grid base styles */
+.quick-switch-grid {
+  padding: 12px 16px !important;
+  gap: 10px !important;
+  max-height: calc(70vh - 140px) !important;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+}
+
+/* Grid view - show thumbnails */
+.quick-switch-grid:not(.list-view) .tab-card {
+  height: 140px;
+  flex-direction: column;
+  padding: 0 !important;
+}
+
+.quick-switch-grid:not(.list-view) .tab-thumbnail {
+  flex: 1;
+  min-height: 80px;
+}
+
+.quick-switch-grid:not(.list-view) .tab-info {
+  padding: 10px 12px;
+}
+
+.quick-switch-grid:not(.list-view) .tab-header {
+  margin-bottom: 2px;
+}
+
+.quick-switch-grid:not(.list-view) .tab-favicon {
+  width: 14px;
+  height: 14px;
+}
+
+.quick-switch-grid:not(.list-view) .tab-title {
+  font-size: 12px;
+}
+
+.quick-switch-grid:not(.list-view) .tab-url {
+  padding-left: 24px;
+  font-size: 10px;
+}
+
+/* List view - compact rows */
+.quick-switch-grid.list-view {
+  display: flex;
+  flex-direction: column;
+  gap: 6px !important;
+}
+
+.quick-switch-grid.list-view .tab-card {
+  width: 100%;
+  height: auto;
+  min-height: 48px;
+  flex-direction: row;
+  align-items: center;
+  padding: 10px 14px !important;
+  gap: 12px;
+}
+
+.quick-switch-grid.list-view .tab-thumbnail {
+  flex: 0 0 36px;
+  height: 36px;
+  width: 36px;
+  min-height: 36px;
+  border-radius: var(--radius-sm);
+  background: var(--bg-glass);
+}
+
+.quick-switch-grid.list-view .favicon-tile {
+  border-radius: var(--radius-sm);
+}
+
+.quick-switch-grid.list-view .favicon-large {
+  width: 22px;
+  height: 22px;
+}
+
+.quick-switch-grid.list-view .tab-info {
+  flex: 1;
+  padding: 0;
+  min-width: 0;
+}
+
+.quick-switch-grid.list-view .tab-header {
+  margin-bottom: 2px;
+}
+
+.quick-switch-grid.list-view .tab-favicon {
+  width: 16px;
+  height: 16px;
+}
+
+.quick-switch-grid.list-view .tab-title {
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.quick-switch-grid.list-view .tab-url {
+  padding-left: 0;
+  font-size: 11px;
+}
+
+/* Current tab indicator */
+.quick-switch-grid .tab-card.current-tab {
+  opacity: 0.6;
+}
+
+.quick-switch-grid.list-view .tab-card.current-tab::after {
+  content: "(current)";
+  font-size: 11px;
+  color: var(--text-muted);
+  margin-left: auto;
+  padding-left: 8px;
+  flex-shrink: 0;
+}
+
+/* Quick switch help text */
+.quick-switch-mode .tab-flow-help {
+  padding: 10px 16px;
+  min-height: 40px;
+}
+
+.quick-switch-mode .tab-flow-help span {
+  font-size: 11px;
+  padding: 0 10px;
+}
+
+.quick-switch-mode .tab-flow-help kbd {
+  min-width: 20px;
+  height: 20px;
+  font-size: 10px;
+}

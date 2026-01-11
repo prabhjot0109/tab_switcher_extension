@@ -1,7 +1,7 @@
 import "./utils/messaging.js";
 import { state } from "./state";
-import { showTabFlow } from "./ui/overlay";
-import { selectNext } from "./input/keyboard";
+import { showTabFlow, showQuickSwitch, closeQuickSwitch } from "./ui/overlay";
+import { selectNext, selectNextQuickSwitch } from "./input/keyboard";
 import { enforceSingleSelection } from "./ui/rendering";
 import { closeOverlay } from "./actions";
 
@@ -102,19 +102,20 @@ try {
 // or the document becomes hidden (user switches tabs). This keeps the
 // extension "fresh" when returning to the page.
 // ============================================================================
-const closeOverlayIfOpen = () => {
+const closeAnyOverlayIfOpen = () => {
   if (state.isOverlayVisible) closeOverlay();
+  if (state.isQuickSwitchVisible) closeQuickSwitch();
 };
 
-window.addEventListener("blur", closeOverlayIfOpen);
+window.addEventListener("blur", closeAnyOverlayIfOpen);
 
 document.addEventListener("visibilitychange", () => {
-  if (document.hidden) closeOverlayIfOpen();
+  if (document.hidden) closeAnyOverlayIfOpen();
 });
 
 chrome.runtime.onMessage.addListener((request, _, sendResponse) => {
   if (request.action === "showTabFlow") {
-    // If overlay already visible, treat repeated Alt+Q as cycle-next
+    // If overlay already visible, treat repeated Alt+W as cycle-next
     if (state.isOverlayVisible) {
       selectNext();
       // Ensure only one selection is highlighted
@@ -124,10 +125,16 @@ chrome.runtime.onMessage.addListener((request, _, sendResponse) => {
     }
     showTabFlow(request.tabs, request.activeTabId, request.groups);
     sendResponse({ success: true });
+  } else if (request.action === "showQuickSwitch") {
+    // Quick switch (Alt+Q) - Alt+Tab style without search bar
+    if (state.isQuickSwitchVisible) {
+      // Cycle to next tab
+      selectNextQuickSwitch();
+      sendResponse({ success: true, advanced: true });
+      return true;
+    }
+    showQuickSwitch(request.tabs, request.activeTabId);
+    sendResponse({ success: true });
   }
   return true;
 });
-
-
-
-

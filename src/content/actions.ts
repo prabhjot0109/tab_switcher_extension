@@ -149,10 +149,7 @@ export function switchToTab(tabId: number) {
         }
       });
     } catch (msgErr: any) {
-      console.debug(
-        "[Tab Flow] sendMessage warn:",
-        msgErr?.message || msgErr
-      );
+      console.debug("[Tab Flow] sendMessage warn:", msgErr?.message || msgErr);
     }
     closeOverlay();
   } catch (error) {
@@ -177,10 +174,7 @@ export function restoreSession(sessionId: string) {
         }
       );
     } catch (msgErr: any) {
-      console.debug(
-        "[Tab Flow] sendMessage warn:",
-        msgErr?.message || msgErr
-      );
+      console.debug("[Tab Flow] sendMessage warn:", msgErr?.message || msgErr);
     }
     closeOverlay();
   } catch (error) {
@@ -376,14 +370,14 @@ export function setViewMode(mode: "active" | "recent") {
   if (state.domCache?.helpText) {
     if (mode === "recent") {
       state.domCache.helpText.innerHTML = `
-        <span><kbd>Alt+Q</kbd> <kbd>↑↓</kbd> Navigate</span>
+        <span><kbd>Alt+W</kbd> <kbd>↑↓</kbd> Navigate</span>
         <span><kbd>Enter</kbd> Restore</span>
         <span><kbd>Backspace</kbd> Active Tabs</span>
         <span><kbd>Esc</kbd> Exit</span>
       `;
     } else {
       state.domCache.helpText.innerHTML = `
-        <span><kbd>Alt+Q</kbd> <kbd>↑↓</kbd> Navigate</span>
+        <span><kbd>Alt+W</kbd> <kbd>↑↓</kbd> Navigate</span>
         <span><kbd>Enter</kbd> Switch Tab</span>
         <span><kbd>Delete</kbd> Close</span>
         <span><kbd>.</kbd> Recent Tabs</span>
@@ -490,7 +484,3 @@ export async function switchToRecent() {
 }
 
 // toggleGroupCollapse removed as headers/collapsing are no longer used
-
-
-
-

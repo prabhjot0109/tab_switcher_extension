@@ -264,13 +264,14 @@ function setupEventListeners() {
     }
   });
 
-  // Allow background command (Alt+Q) to cycle selection when this popup
+  // Allow background command (Alt+W) to cycle selection when this popup
   // window is already open (protected-page fallback).
   if (chrome?.runtime?.onMessage) {
     chrome.runtime.onMessage.addListener((request, _sender, sendResponse) => {
+      console.log("[FLOW POPUP] Received message:", request?.action);
       if (request?.action === "FlowPopupCycleNext") {
+        console.log("[FLOW POPUP] Cycling to next tab");
         selectNext();
-        updateSelection();
         sendResponse?.({ success: true });
         return true;
       }
@@ -360,8 +361,8 @@ function handleSearch(e?: Event) {
 }
 
 function handleSearchKeydown(e: KeyboardEvent) {
-  // Handle Alt+Q to cycle through tabs (even when in search box)
-  if ((e.key === "q" || e.key === "Q") && e.altKey) {
+  // Handle Alt+W to cycle through tabs (even when in search box)
+  if ((e.key === "w" || e.key === "W") && e.altKey) {
     e.preventDefault();
     e.stopPropagation();
     selectNext();
@@ -402,8 +403,8 @@ function handleSearchKeydown(e: KeyboardEvent) {
 }
 
 function handleKeyDown(e: KeyboardEvent) {
-  // Handle Alt+Q to cycle through tabs (matches normal Flow behavior)
-  if ((e.key === "q" || e.key === "Q") && e.altKey) {
+  // Handle Alt+W to cycle through tabs (matches normal Flow behavior)
+  if ((e.key === "w" || e.key === "W") && e.altKey) {
     e.preventDefault();
     e.stopPropagation();
     // Cycle to next tab like Alt+Tab
@@ -788,7 +789,7 @@ function updateHelpText() {
     helpText.appendChild(createHelpItem(["Backspace"], "Exit"));
     helpText.appendChild(createHelpItem(["Esc"], "Exit"));
   } else {
-    helpText.appendChild(createHelpItem(["Alt+Q", "↑↓"], "Navigate"));
+    helpText.appendChild(createHelpItem(["Alt+W", "↑↓"], "Navigate"));
     helpText.appendChild(createHelpItem(["↵"], "Switch"));
     helpText.appendChild(createHelpItem(["Del"], "Close"));
     helpText.appendChild(createHelpItem(["."], "Recent"));

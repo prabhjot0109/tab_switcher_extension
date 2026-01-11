@@ -9,6 +9,7 @@ export default defineConfig({
     rollupOptions: {
       input: {
         Flow: resolve(__dirname, "src/flow/index.html"),
+        QuickSwitch: resolve(__dirname, "src/quick-switch/index.html"),
       },
     },
   },
@@ -20,6 +21,3 @@ export default defineConfig({
     },
   },
 });
-
-
-

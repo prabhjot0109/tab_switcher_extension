@@ -1,32 +1,32 @@
 {
   "../../../@crx/manifest": {
-    "file": "assets/crx-manifest.js-q4isyncv.js",
+    "file": "assets/crx-manifest.js-62TsIryn.js",
     "name": "crx-manifest.js",
     "src": "../../../@crx/manifest",
     "isEntry": true
   },
-  "_index.ts-loader-CTQ9uiuU.js": {
-    "file": "assets/index.ts-loader-CTQ9uiuU.js",
-    "src": "_index.ts-loader-CTQ9uiuU.js"
+  "_index.ts-loader-H9IaCqIx.js": {
+    "file": "assets/index.ts-loader-H9IaCqIx.js",
+    "src": "_index.ts-loader-H9IaCqIx.js"
   },
   "_modulepreload-polyfill-B5Qt9EMX.js": {
     "file": "assets/modulepreload-polyfill-B5Qt9EMX.js",
     "name": "modulepreload-polyfill"
   },
   "src/background/index.ts": {
-    "file": "assets/index.ts-DbbxY15F.js",
+    "file": "assets/index.ts-BxP2bVxz.js",
     "name": "index.ts",
     "src": "src/background/index.ts",
     "isEntry": true
   },
   "src/content/index.ts": {
-    "file": "assets/index.ts-D_wZtUlM.js",
+    "file": "assets/index.ts-DFSbDPE5.js",
     "name": "index.ts",
     "src": "src/content/index.ts",
     "isEntry": true
   },
   "src/flow/index.html": {
-    "file": "assets/Flow-RQMCfom_.js",
+    "file": "assets/Flow-D_135g6k.js",
     "name": "Flow",
     "src": "src/flow/index.html",
     "isEntry": true,
@@ -38,7 +38,7 @@
     ]
   },
   "src/popup/popup.html": {
-    "file": "assets/popup.html-B2bnJHwC.js",
+    "file": "assets/popup.html-DA3_J9NE.js",
     "name": "popup.html",
     "src": "src/popup/popup.html",
     "isEntry": true,
@@ -46,7 +46,19 @@
       "_modulepreload-polyfill-B5Qt9EMX.js"
     ],
     "css": [
-      "assets/popup-z9s7xm7Q.css"
+      "assets/popup-BEuiWHpi.css"
+    ]
+  },
+  "src/quick-switch/index.html": {
+    "file": "assets/QuickSwitch-B2SPP1dW.js",
+    "name": "QuickSwitch",
+    "src": "src/quick-switch/index.html",
+    "isEntry": true,
+    "imports": [
+      "_modulepreload-polyfill-B5Qt9EMX.js"
+    ],
+    "css": [
+      "assets/QuickSwitch-Dh5Z7IyI.css"
     ]
   }
 }

@@ -1,10 +1,10 @@
 {
   "manifest_version": 3,
-  "name": "Tab Flow",
+  "name": "Tab Flow - Visual Tab Manager & Switcher",
   "short_name": "Tab Flow",
   "version": "1.1.0",
   "description": "A visual Tab Flow with thumbnail previews - navigate tabs with keyboard shortcuts, mouse clicks, or arrow keys",
-  "homepage_url": "https://github.com/prabhjot0109/tab_flow",
+  "homepage_url": "https://github.com/prabhjot0109/TabFlow",
   "content_security_policy": {
     "extension_pages": "script-src 'self'; object-src 'self';"
   },
@@ -28,7 +28,7 @@
   "content_scripts": [
     {
       "js": [
-        "assets/index.ts-loader-CTQ9uiuU.js"
+        "assets/index.ts-loader-H9IaCqIx.js"
       ],
       "matches": [
         "<all_urls>"
@@ -38,13 +38,21 @@
     }
   ],
   "commands": {
-    "show-tab-flow": {
+    "quick-switch": {
       "suggested_key": {
         "default": "Alt+Q",
         "windows": "Alt+Q",
         "mac": "Alt+Q"
       },
-      "description": "Show visual Tab Flow (can be changed to Ctrl+Tab in chrome://extensions/shortcuts)"
+      "description": "Quick tab switch (Alt+Tab style - instant)"
+    },
+    "show-tab-flow": {
+      "suggested_key": {
+        "default": "Alt+W",
+        "windows": "Alt+W",
+        "mac": "Alt+W"
+      },
+      "description": "Show Tab Flow with search"
     },
     "cycle-next-tab": {
       "suggested_key": {
@@ -87,7 +95,7 @@
         "https://*/*"
       ],
       "resources": [
-        "assets/index.ts-D_wZtUlM.js"
+        "assets/index.ts-DFSbDPE5.js"
       ],
       "use_dynamic_url": false
     }

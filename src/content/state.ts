@@ -39,6 +39,8 @@ export interface State {
   filteredTabs: Tab[];
   selectedIndex: number;
   isOverlayVisible: boolean;
+  isQuickSwitchVisible: boolean;
+  quickSwitchTabs: Tab[];
   viewMode: "active" | "recent";
   recentItems: Tab[];
   groups: Group[];
@@ -93,6 +95,8 @@ export const state: State = {
   filteredTabs: [],
   selectedIndex: 0,
   isOverlayVisible: false,
+  isQuickSwitchVisible: false,
+  quickSwitchTabs: [],
   viewMode: "active",
   recentItems: [],
   groups: [],
@@ -146,7 +150,3 @@ export const state: State = {
     active: false,
   },
 };
-
-
-
-

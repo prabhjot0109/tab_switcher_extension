@@ -34,6 +34,12 @@ export async function handleMessage(
         sendResponse({ success: true });
         break;
 
+      case "QuickSwitchPopupCycleNext":
+        // Internal message used to control the standalone Quick Switch popup.
+        // The popup page listens for this; background can safely ack it too.
+        sendResponse({ success: true });
+        break;
+
       case "reportMediaPresence":
         if (sender.tab && sender.tab.id) {
           mediaTracker.addMediaTab(sender.tab.id);
@@ -351,6 +357,68 @@ export async function handleMessage(
         }
         break;
 
+      case "getTabsForQuickSwitch":
+        // Used by the Quick Switch popup window to request tab data directly
+        try {
+          const currentWindow = await chrome.windows.getCurrent();
+          const allWindows = await chrome.windows.getAll({ populate: false });
+
+          // Find the main browser window (not popup type)
+          let targetWindowId = currentWindow.id;
+          for (const win of allWindows) {
+            if (win.type === "normal" && win.focused !== true) {
+              targetWindowId = win.id;
+              break;
+            }
+          }
+
+          // If the current window is a popup, find the last focused normal window
+          if (currentWindow.type === "popup") {
+            for (const win of allWindows) {
+              if (win.type === "normal") {
+                targetWindowId = win.id;
+                break;
+              }
+            }
+          }
+
+          const tabs = await chrome.tabs.query({
+            windowId: targetWindowId,
+          });
+
+          const tabsWithIds = tabs.filter(
+            (tab): tab is chrome.tabs.Tab & { id: number } =>
+              typeof tab.id === "number"
+          );
+
+          // Sort by recent access order
+          const sortedTabs = tabTracker.sortTabsByRecent(tabsWithIds);
+
+          // Build minimal tab data (no screenshots needed for quick switch)
+          const tabsData = sortedTabs.map((tab) => ({
+            id: tab.id,
+            title: tab.title || "Untitled",
+            url: tab.url,
+            favIconUrl: tab.favIconUrl,
+            pinned: tab.pinned,
+            index: tab.index,
+            active: tab.active,
+            audible: tab.audible,
+            mutedInfo: tab.mutedInfo,
+            groupId: tab.groupId,
+            hasMedia: mediaTracker.hasMedia(tab.id) || tab.audible,
+          }));
+
+          sendResponse({
+            success: true,
+            tabs: tabsData,
+          });
+        } catch (error: any) {
+          console.error("[ERROR] Failed to get tabs for Quick Switch:", error);
+          sendResponse({ success: false, error: error.message });
+        }
+        break;
+
       default:
         console.warn("[WARNING] Unknown action:", request.action);
         sendResponse({ success: false, error: "Unknown action" });
@@ -405,7 +473,3 @@ export async function sendMessageWithRetry(
     }
   }
 }
-
-
-
-

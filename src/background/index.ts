@@ -44,11 +44,12 @@ async function openFlowPopup(
           await chrome.windows.update(FlowPopupWindowId, { focused: true });
 
           // If the popup is already open, treat repeated command as cycle-next
-          // (matches the overlay behavior where repeated Alt+Q advances selection).
+          console.log("[POPUP] Sending FlowPopupCycleNext message");
           try {
+            // Send message to all extension contexts (popup will receive it)
             chrome.runtime.sendMessage({ action: "FlowPopupCycleNext" });
-          } catch {
-            // Ignore messaging errors
+          } catch (err) {
+            console.log("[POPUP] Message send error:", err);
           }
           return;
         }
@@ -113,6 +114,100 @@ async function openFlowPopup(
     console.log("[POPUP] Flow popup window created");
   } catch (error) {
     console.error("[POPUP] Failed to create Flow popup:", error);
+  }
+}
+
+// Track the quick switch popup window ID to avoid duplicates
+let QuickSwitchPopupWindowId: number | null = null;
+
+async function openQuickSwitchPopup(
+  tabsData: any[],
+  activeTabId: number
+): Promise<void> {
+  try {
+    // Check if popup already exists and is still open
+    if (QuickSwitchPopupWindowId !== null) {
+      try {
+        const existingWindow = await chrome.windows.get(
+          QuickSwitchPopupWindowId
+        );
+        if (existingWindow) {
+          // Focus the existing popup
+          await chrome.windows.update(QuickSwitchPopupWindowId, {
+            focused: true,
+          });
+
+          // If the popup is already open, treat repeated command as cycle-next
+          console.log(
+            "[QUICK SWITCH] Sending QuickSwitchPopupCycleNext message"
+          );
+          try {
+            chrome.runtime.sendMessage({ action: "QuickSwitchPopupCycleNext" });
+          } catch (err) {
+            console.log("[QUICK SWITCH] Message send error:", err);
+          }
+          return;
+        }
+      } catch {
+        // Window no longer exists, proceed to create new one
+        QuickSwitchPopupWindowId = null;
+      }
+    }
+
+    // Store tab data in session storage for the popup to retrieve
+    await chrome.storage.session.set({
+      QuickSwitchTabData: {
+        tabs: tabsData,
+        activeTabId: activeTabId,
+      },
+    });
+
+    // Get the current window to position the popup
+    const currentWindow = await chrome.windows.getCurrent();
+    const popupWidth = 680;
+    const popupHeight = 500;
+
+    // Calculate center position
+    const left =
+      currentWindow.left !== undefined
+        ? Math.round(
+            currentWindow.left + (currentWindow.width! - popupWidth) / 2
+          )
+        : 100;
+    const top =
+      currentWindow.top !== undefined
+        ? Math.round(
+            currentWindow.top + (currentWindow.height! - popupHeight) / 2
+          )
+        : 100;
+
+    // Create popup window with quick switch page
+    const popupWindow = await chrome.windows.create({
+      url: chrome.runtime.getURL("src/quick-switch/index.html"),
+      type: "popup",
+      width: popupWidth,
+      height: popupHeight,
+      left: left,
+      top: top,
+      focused: true,
+    });
+
+    if (popupWindow?.id) {
+      QuickSwitchPopupWindowId = popupWindow.id;
+
+      // Listen for window close to reset the ID
+      const handleWindowRemoved = (windowId: number) => {
+        if (windowId === QuickSwitchPopupWindowId) {
+          QuickSwitchPopupWindowId = null;
+          chrome.windows.onRemoved.removeListener(handleWindowRemoved);
+        }
+      };
+      chrome.windows.onRemoved.addListener(handleWindowRemoved);
+    }
+
+    console.log("[POPUP] Quick Switch popup window created");
+  } catch (error) {
+    console.error("[POPUP] Failed to create Quick Switch popup:", error);
   }
 }
 
@@ -309,6 +404,8 @@ if (typeof chrome !== "undefined" && chrome.commands) {
   chrome.commands.onCommand.addListener((command) => {
     if (command === "show-tab-flow" || command === "cycle-next-tab") {
       handleShowTabFlow();
+    } else if (command === "quick-switch") {
+      handleQuickSwitch();
     }
   });
 }
@@ -335,7 +432,10 @@ async function handleShowTabFlow(): Promise<void> {
       });
 
       const FlowUrl = chrome.runtime.getURL("src/flow/index.html");
-      if (currentWindow?.type === "popup" && currentActiveTab?.url === FlowUrl) {
+      if (
+        currentWindow?.type === "popup" &&
+        currentActiveTab?.url === FlowUrl
+      ) {
         chrome.runtime.sendMessage({ action: "FlowPopupCycleNext" });
         return;
       }
@@ -448,6 +548,118 @@ async function handleShowTabFlow(): Promise<void> {
   }
 }
 
+// Handle Quick Switch (Alt+Q) - Alt+Tab style switching without search
+async function handleQuickSwitch(): Promise<void> {
+  // Ensure cache and recent order are restored
+  if (screenshotCache.ready) await screenshotCache.ready;
+  if (!tabTracker.isRecentOrderRestored()) {
+    await tabTracker.restoreRecentOrder();
+  }
+
+  // EARLY CHECK: If Quick Switch popup already exists, cycle selection and return
+  if (QuickSwitchPopupWindowId !== null) {
+    try {
+      const existingWindow = await chrome.windows.get(QuickSwitchPopupWindowId);
+      if (existingWindow) {
+        // Focus the existing popup
+        await chrome.windows.update(QuickSwitchPopupWindowId, {
+          focused: true,
+        });
+        // Cycle to next tab
+        console.log("[QUICK SWITCH] Popup exists, sending cycle message");
+        try {
+          chrome.runtime.sendMessage({ action: "QuickSwitchPopupCycleNext" });
+        } catch (err) {
+          console.log("[QUICK SWITCH] Message send error:", err);
+        }
+        return;
+      }
+    } catch {
+      // Window no longer exists, clear the ID and continue
+      QuickSwitchPopupWindowId = null;
+    }
+  }
+
+  // Also check if we're already in the quick switch popup window
+  try {
+    const currentWindow = await chrome.windows.getCurrent();
+    const QuickSwitchUrl = chrome.runtime.getURL("src/quick-switch/index.html");
+    const [currentActiveTab] = await chrome.tabs.query({
+      active: true,
+      windowId: currentWindow.id,
+    });
+
+    if (
+      currentWindow?.type === "popup" &&
+      currentActiveTab?.url?.startsWith(QuickSwitchUrl.split("?")[0])
+    ) {
+      // We're in the quick switch popup, just cycle
+      console.log("[QUICK SWITCH] Inside popup, sending cycle message");
+      chrome.runtime.sendMessage({ action: "QuickSwitchPopupCycleNext" });
+      return;
+    }
+  } catch {
+    // Ignore detection errors and proceed with normal flow
+  }
+
+  try {
+    const currentWindow = await chrome.windows.getCurrent();
+    const tabs = await chrome.tabs.query({ windowId: currentWindow.id });
+
+    const tabsWithIds = tabs.filter(
+      (tab): tab is chrome.tabs.Tab & { id: number } =>
+        typeof tab.id === "number"
+    );
+
+    // Sort by recent access order
+    const sortedTabs = tabTracker.sortTabsByRecent(tabsWithIds);
+
+    // Build minimal tab data (no screenshots needed for quick switch)
+    const tabsData = sortedTabs.map((tab) => ({
+      id: tab.id,
+      title: tab.title || "Untitled",
+      url: tab.url,
+      favIconUrl: tab.favIconUrl,
+      pinned: tab.pinned,
+      index: tab.index,
+      active: tab.active,
+      audible: tab.audible,
+      mutedInfo: tab.mutedInfo,
+      groupId: tab.groupId,
+      hasMedia: mediaTracker.hasMedia(tab.id) || tab.audible,
+    }));
+
+    // Get active tab
+    const [activeTab] = await chrome.tabs.query({
+      active: true,
+      currentWindow: true,
+    });
+
+    if (!activeTab || typeof activeTab.id !== "number") {
+      console.warn("[QUICK SWITCH] No active tab found");
+      return;
+    }
+
+    // For protected pages, open popup window instead
+    if (!screenshot.isTabCapturable(activeTab)) {
+      console.log("[QUICK SWITCH] Protected page, opening popup window");
+      await openQuickSwitchPopup(tabsData, activeTab.id);
+      return;
+    }
+
+    // Send to content script with quickSwitch flag
+    await sendMessageWithRetry(activeTab.id, {
+      action: "showQuickSwitch",
+      tabs: tabsData,
+      activeTabId: activeTab.id,
+    });
+
+    console.log("[QUICK SWITCH] Quick switch overlay triggered");
+  } catch (error) {
+    console.error("[ERROR] Failed to show quick switch:", error);
+  }
+}
+
 // ============================================================================
 // MESSAGE LISTENER
 // ============================================================================
@@ -476,7 +688,3 @@ if (
 initialize().catch((error) => {
   console.error("[INIT] Failed to initialize:", error);
 });
-
-
-
-

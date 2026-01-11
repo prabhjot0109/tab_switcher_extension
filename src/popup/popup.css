@@ -101,7 +101,23 @@ h1 {
 .tagline {
   color: var(--muted);
   font-size: 13px;
-  margin-bottom: 32px;
+  margin-bottom: 16px;
+}
+
+.tagline.secondary {
+  margin-bottom: 24px;
+}
+
+.shortcut-hero.secondary {
+  margin-top: 8px;
+  margin-bottom: 4px;
+  font-size: 16px;
+}
+
+.hero-key.small {
+  padding: 4px 10px;
+  font-size: 14px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
 }
 
 .section {
@@ -168,7 +184,3 @@ kbd {
   color: var(--text);
   border-bottom-style: solid;
 }
-
-
-
-

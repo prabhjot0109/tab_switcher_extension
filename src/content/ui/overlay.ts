@@ -305,9 +305,7 @@ export function createOverlay() {
 
   // Grid container with virtual scrolling support
   const grid = document.createElement("div");
-  grid.className = `tab-flow-grid ${
-    currentView === "list" ? "list-view" : ""
-  }`;
+  grid.className = `tab-flow-grid ${currentView === "list" ? "list-view" : ""}`;
   grid.id = "tab-flow-grid";
   grid.setAttribute("role", "listbox");
   grid.setAttribute("aria-label", "Open tabs");
@@ -318,7 +316,7 @@ export function createOverlay() {
   const helpText = document.createElement("div");
   helpText.className = "tab-flow-help";
   helpText.innerHTML = `
-      <span><kbd>Alt+Q</kbd> <kbd>↑↓</kbd> Navigate</span>
+      <span><kbd>Alt+W</kbd> <kbd>↑↓</kbd> Navigate</span>
      <span><kbd>↵</kbd>Switch</span>
      <span><kbd>Del</kbd>Close</span>
      <span><kbd>.</kbd>Recent</span>
@@ -559,6 +557,433 @@ export function showTabFlow(
   }, 100);
 }
 
+// ============================================================================
+// QUICK SWITCH OVERLAY (Alt+Q - Alt+Tab style)
+// ============================================================================
 
+let quickSwitchOverlay: HTMLElement | null = null;
+let quickSwitchGrid: HTMLElement | null = null;
+let cachedQuickSwitchViewMode: "grid" | "list" = "grid"; // Default to grid
 
+// Load quick switch view mode from chrome.storage once on script initialization
+try {
+  chrome.storage.local.get(["QuickSwitchViewMode"], (result) => {
+    if (!chrome.runtime.lastError && result.QuickSwitchViewMode) {
+      const mode = result.QuickSwitchViewMode as "grid" | "list";
+      if (mode === "grid" || mode === "list") {
+        cachedQuickSwitchViewMode = mode;
+      }
+    }
+  });
+} catch {
+  // Ignore - use default
+}
 
+/** Sync view mode from chrome.storage and update UI before showing */
+async function syncQuickSwitchViewMode(): Promise<void> {
+  return new Promise((resolve) => {
+    try {
+      chrome.storage.local.get(["QuickSwitchViewMode"], (result) => {
+        if (!chrome.runtime.lastError && result.QuickSwitchViewMode) {
+          const mode = result.QuickSwitchViewMode as "grid" | "list";
+          if (mode === "grid" || mode === "list") {
+            cachedQuickSwitchViewMode = mode;
+          }
+        }
+        // Update UI if overlay exists
+        updateQuickSwitchViewUI();
+        resolve();
+      });
+    } catch {
+      resolve();
+    }
+  });
+}
+
+/** Update the quick switch UI to reflect current view mode */
+function updateQuickSwitchViewUI() {
+  if (!quickSwitchOverlay || !quickSwitchGrid) return;
+
+  // Update grid class
+  quickSwitchGrid.classList.toggle(
+    "list-view",
+    cachedQuickSwitchViewMode === "list"
+  );
+
+  // Update toggle buttons
+  const gridBtn = quickSwitchOverlay.querySelector('[data-view="grid"]');
+  const listBtn = quickSwitchOverlay.querySelector('[data-view="list"]');
+  if (gridBtn)
+    gridBtn.classList.toggle("active", cachedQuickSwitchViewMode === "grid");
+  if (listBtn)
+    listBtn.classList.toggle("active", cachedQuickSwitchViewMode === "list");
+}
+
+function createQuickSwitchOverlay() {
+  if (quickSwitchOverlay) return;
+
+  const shadowRoot = ensureShadowRoot();
+  if (!shadowRoot) return;
+
+  // Create overlay container
+  const overlay = document.createElement("div");
+  overlay.id = "quick-switch-overlay";
+  overlay.className = "tab-flow-overlay quick-switch-mode";
+  overlay.style.willChange = "opacity";
+
+  // Create backdrop
+  const backdrop = document.createElement("div");
+  backdrop.className = "tab-flow-backdrop";
+  overlay.appendChild(backdrop);
+
+  // Create compact container
+  const container = document.createElement("div");
+  container.className = "tab-flow-container quick-switch-container";
+  container.style.transform = "translate3d(0, 0, 0)";
+
+  // Section header with title and view toggle
+  const sectionHeader = document.createElement("div");
+  sectionHeader.className = "tab-flow-section-header";
+
+  const sectionTitle = document.createElement("span");
+  sectionTitle.className = "tab-flow-section-title";
+  sectionTitle.textContent = "Switch Tabs";
+
+  // View toggle
+  const viewToggle = document.createElement("div");
+  viewToggle.className = "tab-flow-view-toggle";
+
+  const gridViewBtn = document.createElement("button");
+  gridViewBtn.type = "button";
+  gridViewBtn.className = `view-toggle-btn ${
+    cachedQuickSwitchViewMode === "grid" ? "active" : ""
+  }`;
+  gridViewBtn.dataset.view = "grid";
+  gridViewBtn.title = "Grid View";
+  gridViewBtn.innerHTML = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+    <rect x="3" y="3" width="7" height="7" rx="1"></rect>
+    <rect x="14" y="3" width="7" height="7" rx="1"></rect>
+    <rect x="3" y="14" width="7" height="7" rx="1"></rect>
+    <rect x="14" y="14" width="7" height="7" rx="1"></rect>
+  </svg>`;
+
+  const listViewBtn = document.createElement("button");
+  listViewBtn.type = "button";
+  listViewBtn.className = `view-toggle-btn ${
+    cachedQuickSwitchViewMode === "list" ? "active" : ""
+  }`;
+  listViewBtn.dataset.view = "list";
+  listViewBtn.title = "List View";
+  listViewBtn.innerHTML = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+    <line x1="3" y1="6" x2="21" y2="6"></line>
+    <line x1="3" y1="12" x2="21" y2="12"></line>
+    <line x1="3" y1="18" x2="21" y2="18"></line>
+  </svg>`;
+
+  viewToggle.appendChild(gridViewBtn);
+  viewToggle.appendChild(listViewBtn);
+
+  sectionHeader.appendChild(sectionTitle);
+  sectionHeader.appendChild(viewToggle);
+  container.appendChild(sectionHeader);
+
+  // Grid container (starts with list view by default)
+  const grid = document.createElement("div");
+  grid.className = `tab-flow-grid quick-switch-grid ${
+    cachedQuickSwitchViewMode === "list" ? "list-view" : ""
+  }`;
+  grid.id = "quick-switch-grid";
+  grid.setAttribute("role", "listbox");
+  grid.setAttribute("aria-label", "Quick switch tabs");
+  grid.style.transform = "translate3d(0, 0, 0)";
+  container.appendChild(grid);
+
+  // Help text
+  const helpText = document.createElement("div");
+  helpText.className = "tab-flow-help";
+  helpText.innerHTML = `
+    <span><kbd>Alt+Q</kbd> Cycle</span>
+    <span><kbd>↑↓</kbd> Navigate</span>
+    <span>Release <kbd>Alt</kbd> to Switch</span>
+    <span><kbd>Esc</kbd> Cancel</span>
+  `;
+  container.appendChild(helpText);
+
+  overlay.appendChild(container);
+
+  // View toggle click handlers
+  viewToggle.addEventListener("click", (e) => {
+    const btn = (e.target as HTMLElement).closest(
+      ".view-toggle-btn"
+    ) as HTMLButtonElement;
+    if (!btn) return;
+
+    const view = btn.dataset.view as "grid" | "list";
+    if (!view) return;
+
+    cachedQuickSwitchViewMode = view;
+
+    // Persist to chrome.storage for global consistency
+    try {
+      chrome.storage.local.set({ QuickSwitchViewMode: view });
+    } catch {
+      // Ignore storage errors
+    }
+
+    // Update button states
+    gridViewBtn.classList.toggle("active", view === "grid");
+    listViewBtn.classList.toggle("active", view === "list");
+
+    // Update grid class
+    grid.classList.toggle("list-view", view === "list");
+  });
+
+  // Click backdrop to close
+  backdrop.addEventListener("click", closeQuickSwitch);
+
+  // Store references
+  quickSwitchOverlay = overlay;
+  quickSwitchGrid = grid;
+
+  shadowRoot.appendChild(overlay);
+}
+
+function renderQuickSwitchTabs(tabs: Tab[]) {
+  if (!quickSwitchGrid) return;
+
+  const grid = quickSwitchGrid;
+  grid.innerHTML = "";
+
+  tabs.forEach((tab, index) => {
+    const card = document.createElement("div");
+    card.className = `tab-card${
+      index === state.selectedIndex ? " selected" : ""
+    }${tab.active ? " current-tab" : ""}`;
+    card.dataset.tabId = String(tab.id);
+    card.dataset.tabIndex = String(index);
+    card.setAttribute("role", "option");
+    card.setAttribute(
+      "aria-selected",
+      index === state.selectedIndex ? "true" : "false"
+    );
+
+    // For grid view, we need the full card structure with thumbnail
+    // Create thumbnail area
+    const thumbnail = document.createElement("div");
+    thumbnail.className = "tab-thumbnail";
+
+    // Favicon tile (shown in thumbnail area for grid view)
+    const faviconTile = document.createElement("div");
+    faviconTile.className = "favicon-tile";
+
+    const faviconLarge = document.createElement("img");
+    faviconLarge.className = "favicon-large";
+    faviconLarge.src = tab.favIconUrl || `chrome://favicon/${tab.url}`;
+    faviconLarge.alt = "";
+    faviconLarge.onerror = () => {
+      faviconLarge.style.display = "none";
+      const letter = document.createElement("div");
+      letter.className = "favicon-letter";
+      letter.textContent = (tab.title || "?")[0].toUpperCase();
+      faviconTile.appendChild(letter);
+    };
+    faviconTile.appendChild(faviconLarge);
+    thumbnail.appendChild(faviconTile);
+
+    // Tab info section
+    const tabInfo = document.createElement("div");
+    tabInfo.className = "tab-info";
+
+    const tabHeader = document.createElement("div");
+    tabHeader.className = "tab-header";
+
+    const title = document.createElement("span");
+    title.className = "tab-title";
+    title.textContent = tab.title || "Untitled";
+    title.title = tab.title || "";
+
+    tabHeader.appendChild(title);
+    tabInfo.appendChild(tabHeader);
+
+    // URL domain
+    const domain = document.createElement("span");
+    domain.className = "tab-url";
+    try {
+      domain.textContent = new URL(tab.url || "").hostname;
+    } catch {
+      domain.textContent = "";
+    }
+    tabInfo.appendChild(domain);
+
+    // Add elements to card
+    card.appendChild(thumbnail);
+    card.appendChild(tabInfo);
+
+    // Click to switch
+    card.addEventListener("click", () => {
+      if (tab.id) {
+        chrome.runtime.sendMessage({ action: "switchToTab", tabId: tab.id });
+        closeQuickSwitch();
+      }
+    });
+
+    grid.appendChild(card);
+  });
+}
+
+export function updateQuickSwitchSelection() {
+  if (!quickSwitchGrid) return;
+
+  const cards = quickSwitchGrid.querySelectorAll(".tab-card");
+  cards.forEach((card, index) => {
+    const isSelected = index === state.selectedIndex;
+    card.classList.toggle("selected", isSelected);
+    card.setAttribute("aria-selected", isSelected ? "true" : "false");
+
+    if (isSelected) {
+      card.scrollIntoView({ block: "nearest", behavior: "smooth" });
+    }
+  });
+}
+
+export function closeQuickSwitch() {
+  if (!state.isQuickSwitchVisible) return;
+
+  state.isQuickSwitchVisible = false;
+  focus.unlockPageInteraction();
+
+  if (quickSwitchOverlay) {
+    quickSwitchOverlay.style.opacity = "0";
+    setTimeout(() => {
+      if (quickSwitchOverlay) {
+        quickSwitchOverlay.style.display = "none";
+      }
+    }, 200);
+  }
+
+  // Remove keyboard listeners
+  document.removeEventListener("keydown", handleQuickSwitchKeyDown, true);
+  document.removeEventListener("keyup", handleQuickSwitchKeyUp, true);
+}
+
+function handleQuickSwitchKeyDown(e: KeyboardEvent) {
+  if (!state.isQuickSwitchVisible) return;
+
+  // Escape to cancel
+  if (e.key === "Escape") {
+    e.preventDefault();
+    e.stopPropagation();
+    closeQuickSwitch();
+    return;
+  }
+
+  // Arrow navigation
+  if (e.key === "ArrowDown" || e.key === "ArrowRight") {
+    e.preventDefault();
+    state.selectedIndex++;
+    if (state.selectedIndex >= state.quickSwitchTabs.length) {
+      state.selectedIndex = 0;
+    }
+    updateQuickSwitchSelection();
+    return;
+  }
+
+  if (e.key === "ArrowUp" || e.key === "ArrowLeft") {
+    e.preventDefault();
+    state.selectedIndex--;
+    if (state.selectedIndex < 0) {
+      state.selectedIndex = state.quickSwitchTabs.length - 1;
+    }
+    updateQuickSwitchSelection();
+    return;
+  }
+
+  // Enter to switch
+  if (e.key === "Enter") {
+    e.preventDefault();
+    if (state.quickSwitchTabs.length > 0 && state.selectedIndex >= 0) {
+      const tab = state.quickSwitchTabs[state.selectedIndex];
+      if (tab?.id) {
+        chrome.runtime.sendMessage({ action: "switchToTab", tabId: tab.id });
+        closeQuickSwitch();
+      }
+    }
+    return;
+  }
+}
+
+function handleQuickSwitchKeyUp(e: KeyboardEvent) {
+  if (!state.isQuickSwitchVisible) return;
+
+  // When Alt is released, switch to the selected tab
+  if (e.key === "Alt") {
+    e.preventDefault();
+    if (state.quickSwitchTabs.length > 0 && state.selectedIndex >= 0) {
+      const tab = state.quickSwitchTabs[state.selectedIndex];
+      if (tab?.id) {
+        chrome.runtime.sendMessage({ action: "switchToTab", tabId: tab.id });
+        closeQuickSwitch();
+      }
+    }
+  }
+}
+
+export async function showQuickSwitch(
+  tabs: Tab[],
+  activeTabId: number | null | undefined
+) {
+  console.log(`[Quick Switch] Opening with ${tabs.length} tabs`);
+
+  if (state.isQuickSwitchVisible) return;
+
+  // Close regular overlay if open
+  if (state.isOverlayVisible) {
+    closeOverlay();
+  }
+
+  createQuickSwitchOverlay();
+
+  if (!quickSwitchOverlay) {
+    return;
+  }
+
+  // Sync view mode from chrome.storage before showing
+  await syncQuickSwitchViewMode();
+
+  state.isQuickSwitchVisible = true;
+  state.quickSwitchTabs = tabs;
+
+  // Start selection at the second tab (previous tab, like Alt+Tab)
+  const activeIndex = tabs.findIndex((tab: Tab) => tab.id === activeTabId);
+  if (tabs.length > 1 && activeIndex === 0) {
+    state.selectedIndex = 1;
+  } else if (activeIndex > 0) {
+    state.selectedIndex = 0;
+  } else {
+    state.selectedIndex = 0;
+  }
+
+  // Render tabs
+  renderQuickSwitchTabs(tabs);
+
+  // Show overlay
+  quickSwitchOverlay.style.display = "flex";
+  quickSwitchOverlay.style.opacity = "0";
+
+  // Lock page interaction
+  focus.lockPageInteraction();
+  focus.blurPageElements();
+
+  // Animate in
+  requestAnimationFrame(() => {
+    requestAnimationFrame(() => {
+      if (quickSwitchOverlay) {
+        quickSwitchOverlay.style.opacity = "1";
+      }
+    });
+  });
+
+  // Add keyboard listeners
+  document.addEventListener("keydown", handleQuickSwitchKeyDown, true);
+  document.addEventListener("keyup", handleQuickSwitchKeyUp, true);
+}
