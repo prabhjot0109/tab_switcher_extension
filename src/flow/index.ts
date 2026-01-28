@@ -178,12 +178,13 @@ async function initialize() {
     const result = await chrome.storage.local.get(["TabFlowViewMode"]);
     if (result.TabFlowViewMode === "list") {
       viewMode = "list";
-      gridViewBtn.classList.remove("active");
-      listViewBtn.classList.add("active");
+      updateViewToggle();
     }
   } catch (e) {
     // Ignore
   }
+
+  updateViewToggle();
 
   // Load tab data from session storage
   try {
@@ -847,10 +848,7 @@ function closeSelectedTab() {
 function setViewMode(mode: "grid" | "list") {
   viewMode = mode;
 
-  gridViewBtn.classList.toggle("active", mode === "grid");
-  listViewBtn.classList.toggle("active", mode === "list");
-
-  tabGrid.classList.toggle("list-view", mode === "list");
+  updateViewToggle();
 
   // Save preference
   try {
@@ -860,6 +858,14 @@ function setViewMode(mode: "grid" | "list") {
   }
 
   updateSelection();
+}
+
+function updateViewToggle() {
+  gridViewBtn.classList.toggle("active", viewMode === "grid");
+  listViewBtn.classList.toggle("active", viewMode === "list");
+  gridViewBtn.setAttribute("aria-pressed", String(viewMode === "grid"));
+  listViewBtn.setAttribute("aria-pressed", String(viewMode === "list"));
+  tabGrid.classList.toggle("list-view", viewMode === "list");
 }
 
 function updateSelection() {
@@ -889,6 +895,7 @@ function updateSelection() {
   // Remove old selection
   tabGrid.querySelectorAll(".tab-card.selected").forEach((el) => {
     el.classList.remove("selected");
+    el.setAttribute("aria-selected", "false");
   });
 
   // Find card by data-index for virtual scrolling support
@@ -904,6 +911,7 @@ function updateSelection() {
 
   if (targetCard) {
     targetCard.classList.add("selected");
+    targetCard.setAttribute("aria-selected", "true");
     targetCard.scrollIntoView({
       block: "nearest",
       behavior: "smooth",
@@ -992,6 +1000,7 @@ function createTabCard(tab: Tab, index: number): HTMLElement {
   if (tab.isWebSearch) {
     card.className = "tab-card web-search-card";
     card.dataset.index = String(index);
+    card.setAttribute("role", "option");
 
     const thumbnail = document.createElement("div");
     thumbnail.className = "tab-thumbnail";
@@ -1044,6 +1053,7 @@ function createTabCard(tab: Tab, index: number): HTMLElement {
     card.className = "tab-card recent-item";
     card.dataset.sessionId = tab.sessionId;
     card.dataset.index = String(index);
+    card.setAttribute("role", "option");
 
     const thumbnail = document.createElement("div");
     thumbnail.className = "tab-thumbnail";
@@ -1103,8 +1113,10 @@ function createTabCard(tab: Tab, index: number): HTMLElement {
     // Restore icon instead of close button for recent items
     const restoreBtn = document.createElement("button");
     restoreBtn.className = "tab-close-btn restore-btn";
+    restoreBtn.type = "button";
     restoreBtn.appendChild(createRestoreSvg());
     restoreBtn.title = "Restore tab";
+    restoreBtn.setAttribute("aria-label", "Restore tab");
     card.appendChild(restoreBtn);
 
     return card;
@@ -1116,6 +1128,7 @@ function createTabCard(tab: Tab, index: number): HTMLElement {
   }`;
   card.dataset.tabId = String(tab.id);
   card.dataset.index = String(index);
+  card.setAttribute("role", "option");
 
   // Find group info
   const group =
@@ -1195,8 +1208,10 @@ function createTabCard(tab: Tab, index: number): HTMLElement {
   // Close button
   const closeBtn = document.createElement("button");
   closeBtn.className = "tab-close-btn";
+  closeBtn.type = "button";
   closeBtn.appendChild(createCloseSvg());
   closeBtn.title = "Close tab";
+  closeBtn.setAttribute("aria-label", "Close tab");
   card.appendChild(closeBtn);
 
   // Audio indicator

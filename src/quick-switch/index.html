@@ -8,15 +8,25 @@
   </head>
   <body>
     <div class="quick-switch-overlay">
-      <div class="quick-switch-container">
+      <div
+        class="quick-switch-container"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="quick-switch-title"
+        aria-describedby="quick-switch-help"
+      >
         <div class="quick-switch-header">
-          <span class="quick-switch-title">Switch Tabs</span>
+          <span class="quick-switch-title" id="quick-switch-title">
+            Switch Tabs
+          </span>
           <div class="view-toggle">
             <button
               type="button"
               class="view-toggle-btn active"
               data-view="grid"
               title="Grid View"
+              aria-label="Grid view"
+              aria-pressed="true"
             >
               <svg
                 viewBox="0 0 24 24"
@@ -35,6 +45,8 @@
               class="view-toggle-btn"
               data-view="list"
               title="List View"
+              aria-label="List view"
+              aria-pressed="false"
             >
               <svg
                 viewBox="0 0 24 24"
@@ -49,8 +61,18 @@
             </button>
           </div>
         </div>
-        <div id="tab-grid" class="tab-grid"></div>
-        <div class="quick-switch-help">
+        <div
+          id="tab-grid"
+          class="tab-grid"
+          role="listbox"
+          aria-label="Quick switch tabs"
+        ></div>
+        <div
+          class="quick-switch-help"
+          id="quick-switch-help"
+          aria-live="polite"
+          aria-atomic="true"
+        >
           <span><kbd>Alt+Q</kbd> Cycle</span>
           <span><kbd>↑↓</kbd> Navigate</span>
           <span>Release <kbd>Alt</kbd> to Switch</span>

@@ -13,6 +13,13 @@ import * as screenshot from "../services/screenshot";
 // Import content script via CRXJS special query to get output filename
 import contentScriptPath from "../../content/index.ts?script";
 
+const DEBUG_LOGGING = false;
+const log = (...args: unknown[]) => {
+  if (DEBUG_LOGGING) {
+    console.log(...args);
+  }
+};
+
 export async function handleMessage(
   request: any,
   sender: chrome.runtime.MessageSender,
@@ -258,13 +265,34 @@ export async function handleMessage(
           const tier = request.tier || PERF_CONFIG.DEFAULT_QUALITY_TIER;
           if (screenshot.setCurrentQualityTier(tier)) {
             chrome.storage.local.set({ qualityTier: tier });
-            console.log(`[SETTINGS] Quality tier changed to: ${tier}`);
+            log(`[SETTINGS] Quality tier changed to: ${tier}`);
             sendResponse({ success: true, tier });
           } else {
             sendResponse({ success: false, error: "Invalid quality tier" });
           }
         } catch (error: any) {
           console.error("[ERROR] Failed to set quality tier:", error);
+          sendResponse({ success: false, error: error.message });
+        }
+        break;
+
+      case "updateCacheSettings":
+        try {
+          const rawTabs = request.maxTabs;
+          const rawMB = request.maxMB;
+          if (typeof rawTabs !== "number" || typeof rawMB !== "number") {
+            sendResponse({ success: false, error: "Invalid cache settings" });
+            return;
+          }
+
+          const maxTabs = Math.min(300, Math.max(20, Math.floor(rawTabs)));
+          const maxMB = Math.min(200, Math.max(10, Math.floor(rawMB)));
+
+          screenshotCache.resize(maxTabs, maxMB * 1024 * 1024);
+          chrome.storage.local.set({ cacheMaxTabs: maxTabs, cacheMaxMB: maxMB });
+          sendResponse({ success: true, maxTabs, maxMB });
+        } catch (error: any) {
+          console.error("[ERROR] Failed to update cache settings:", error);
           sendResponse({ success: false, error: error.message });
         }
         break;
@@ -527,18 +555,23 @@ export async function sendMessageWithRetry(
   tabId: number,
   message: any,
   retries = 1
-): Promise<void> {
+): Promise<boolean> {
   try {
     await chrome.tabs.sendMessage(tabId, message);
+    return true;
   } catch (err: any) {
     if (retries > 0 && isMissingConnectionError(err)) {
-      const injected = await tryInjectContentScript(tabId);
-      if (!injected) return;
+      try {
+        const injected = await tryInjectContentScript(tabId);
+        if (!injected) return false;
 
-      await new Promise((resolve) => setTimeout(resolve, 150));
-      await chrome.tabs.sendMessage(tabId, message);
-    } else {
-      throw err;
+        await new Promise((resolve) => setTimeout(resolve, 150));
+        await chrome.tabs.sendMessage(tabId, message);
+        return true;
+      } catch {
+        return false;
+      }
     }
+    throw err;
   }
 }

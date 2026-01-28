@@ -10,6 +10,7 @@ export default defineConfig({
       input: {
         Flow: resolve(__dirname, "src/flow/index.html"),
         QuickSwitch: resolve(__dirname, "src/quick-switch/index.html"),
+        Options: resolve(__dirname, "src/options/options.html"),
       },
     },
   },

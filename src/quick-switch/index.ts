@@ -34,6 +34,18 @@ const log = (...args: unknown[]) => {
   }
 };
 
+function getFaviconUrl(url?: string, size = 32): string | null {
+  if (!url) return null;
+  try {
+    const favUrl = new URL(chrome.runtime.getURL("/_favicon/"));
+    favUrl.searchParams.set("pageUrl", url);
+    favUrl.searchParams.set("size", String(size));
+    return favUrl.toString();
+  } catch {
+    return null;
+  }
+}
+
 // State
 let tabs: Tab[] = [];
 let selectedIndex = 0;
@@ -66,6 +78,8 @@ async function initialize() {
   } catch (e) {
     // Ignore
   }
+
+  updateViewToggle();
 
   // Load tab data from session storage
   try {
@@ -100,6 +114,9 @@ async function initialize() {
 
   // Set up event listeners
   setupEventListeners();
+  tabGrid.setAttribute("role", "listbox");
+  tabGrid.setAttribute("aria-label", "Quick switch tabs");
+  tabGrid.tabIndex = 0;
 }
 
 async function requestTabsFromBackground() {
@@ -281,6 +298,8 @@ function updateViewToggle() {
   gridViewBtn.classList.toggle("active", viewMode === "grid");
   listViewBtn.classList.toggle("active", viewMode === "list");
   tabGrid.classList.toggle("list-view", viewMode === "list");
+  gridViewBtn.setAttribute("aria-pressed", String(viewMode === "grid"));
+  listViewBtn.setAttribute("aria-pressed", String(viewMode === "list"));
 }
 
 // ============================================================================
@@ -300,6 +319,8 @@ function renderTabs() {
     }`;
     card.dataset.tabId = String(tab.id);
     card.dataset.tabIndex = String(index);
+    card.setAttribute("role", "option");
+    card.setAttribute("aria-selected", String(index === selectedIndex));
 
     // Thumbnail area
     const thumbnail = document.createElement("div");
@@ -310,7 +331,8 @@ function renderTabs() {
 
     const faviconLarge = document.createElement("img");
     faviconLarge.className = "favicon-large";
-    faviconLarge.src = tab.favIconUrl || `chrome://favicon/${tab.url}`;
+    faviconLarge.src =
+      tab.favIconUrl || getFaviconUrl(tab.url) || "";
     faviconLarge.alt = "";
     faviconLarge.onerror = () => {
       faviconLarge.style.display = "none";
@@ -360,6 +382,7 @@ function updateSelection() {
   cards.forEach((card, index) => {
     const isSelected = index === selectedIndex;
     card.classList.toggle("selected", isSelected);
+    card.setAttribute("aria-selected", String(isSelected));
 
     if (isSelected) {
       card.scrollIntoView({ block: "nearest", behavior: "smooth" });

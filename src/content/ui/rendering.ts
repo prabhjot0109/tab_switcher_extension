@@ -47,7 +47,7 @@ TAB_CARD_TEMPLATE.innerHTML = `
       <div class="tab-url" style="display: none;"></div>
     </div>
     <div class="tab-media-controls"></div>
-    <button class="tab-close-btn" data-action="close" title="Close tab">×</button>
+    <button class="tab-close-btn" type="button" data-action="close" title="Close tab" aria-label="Close tab">×</button>
   </div>
 `;
 
@@ -86,12 +86,16 @@ function createMediaButton(
   className: string,
   action: string,
   svgTemplate: SVGSVGElement,
-  title: string
+  title: string,
+  pressed: boolean
 ): HTMLButtonElement {
   const btn = document.createElement("button");
   btn.className = className;
   btn.dataset.action = action;
   btn.title = title;
+  btn.type = "button";
+  btn.setAttribute("aria-label", title);
+  btn.setAttribute("aria-pressed", String(pressed));
   btn.appendChild(cloneSVG(svgTemplate));
   return btn;
 }
@@ -366,7 +370,8 @@ export function createTabCard(tab: Tab, index: number): HTMLElement {
         "tab-play-btn visible",
         "play-pause",
         isAudible ? SVG_PAUSE_TEMPLATE : SVG_PLAY_TEMPLATE,
-        isAudible ? "Pause tab" : "Play tab"
+        isAudible ? "Pause tab" : "Play tab",
+        Boolean(isAudible)
       );
       playBtn.dataset.tabId = String(tab.id);
       if (isAudible) playBtn.classList.add("playing");
@@ -377,7 +382,8 @@ export function createTabCard(tab: Tab, index: number): HTMLElement {
         "tab-mute-btn visible",
         "mute",
         isMuted ? SVG_MUTE_TEMPLATE : SVG_UNMUTE_TEMPLATE,
-        isMuted ? "Unmute tab" : "Mute tab"
+        isMuted ? "Unmute tab" : "Mute tab",
+        Boolean(isMuted)
       );
       muteBtn.dataset.tabId = String(tab.id);
       if (isMuted) muteBtn.classList.add("muted");

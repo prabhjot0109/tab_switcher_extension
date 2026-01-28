@@ -7,10 +7,16 @@
     <link rel="stylesheet" href="styles.css" />
   </head>
   <body>
-    <div id="visual-tab-flow-overlay" class="tab-flow-overlay">
-      <div class="tab-flow-backdrop"></div>
+      <div id="visual-tab-flow-overlay" class="tab-flow-overlay">
+        <div class="tab-flow-backdrop"></div>
 
-      <div class="tab-flow-container">
+      <div
+        class="tab-flow-container"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="tab-flow-title"
+        aria-describedby="tab-flow-help"
+      >
         <!-- Search Header -->
         <div class="tab-flow-search-row">
           <div class="tab-flow-search-wrap">
@@ -36,20 +42,28 @@
               class="tab-flow-search"
               placeholder="Search tabs by title or URL..."
               autocomplete="off"
+              aria-label="Search tabs"
+              aria-describedby="tab-flow-search-hint"
             />
-            <div class="search-tab-hint"><kbd>Tab</kbd> Search Google</div>
+            <div class="search-tab-hint" id="tab-flow-search-hint">
+              <kbd>Tab</kbd> Search Google
+            </div>
           </div>
         </div>
 
         <!-- Section Header -->
         <div class="tab-flow-section-header">
-          <span class="tab-flow-section-title">Opened Tabs</span>
+          <span class="tab-flow-section-title" id="tab-flow-title">
+            Opened Tabs
+          </span>
           <div class="tab-flow-view-toggle">
             <button
               type="button"
               class="view-toggle-btn active"
               data-view="grid"
               title="Grid View"
+              aria-label="Grid view"
+              aria-pressed="true"
             >
               <svg
                 viewBox="0 0 24 24"
@@ -68,6 +82,8 @@
               class="view-toggle-btn"
               data-view="list"
               title="List View"
+              aria-label="List view"
+              aria-pressed="false"
             >
               <svg
                 viewBox="0 0 24 24"
@@ -84,12 +100,22 @@
         </div>
 
         <!-- Tab Grid -->
-        <div class="tab-flow-grid" id="tab-flow-grid">
+        <div
+          class="tab-flow-grid"
+          id="tab-flow-grid"
+          role="listbox"
+          aria-label="Open tabs"
+        >
           <!-- Tabs will be rendered here -->
         </div>
 
         <!-- Help text -->
-        <div class="tab-flow-help">
+        <div
+          class="tab-flow-help"
+          id="tab-flow-help"
+          aria-live="polite"
+          aria-atomic="true"
+        >
           <span><kbd>Alt+Q</kbd> <kbd>↑↓</kbd> Navigate</span>
           <span><kbd>↵</kbd>Switch</span>
           <span><kbd>Del</kbd>Close</span>

@@ -237,6 +237,8 @@ async function initialize(): Promise<void> {
   log(`Target: <100ms overlay open, <50MB memory, 60fps`);
   log("═══════════════════════════════════════════════════════");
 
+  await loadCacheSettings();
+
   // Load persisted data
   await mediaTracker.loadTabsWithMedia();
   await screenshot.loadQualityTierFromStorage();
@@ -283,6 +285,33 @@ async function setupAlarms(): Promise<void> {
   }
 
   log("[ALARMS] Periodic alarms set up successfully");
+}
+
+async function loadCacheSettings(): Promise<void> {
+  try {
+    const result = await chrome.storage.local.get([
+      "cacheMaxTabs",
+      "cacheMaxMB",
+    ]);
+
+    const maxTabs =
+      typeof result.cacheMaxTabs === "number"
+        ? result.cacheMaxTabs
+        : PERF_CONFIG.MAX_CACHED_TABS;
+
+    const maxMB =
+      typeof result.cacheMaxMB === "number"
+        ? result.cacheMaxMB
+        : PERF_CONFIG.MAX_CACHE_BYTES / 1024 / 1024;
+
+    await screenshotCache.ready;
+    screenshotCache.resize(maxTabs, Math.round(maxMB * 1024 * 1024));
+    log(
+      `[CACHE] Limits set to ${maxTabs} tabs, ${Math.round(maxMB)}MB total`
+    );
+  } catch (error) {
+    console.warn("[CACHE] Failed to load cache settings:", error);
+  }
 }
 
 // Alarm listener
@@ -541,15 +570,25 @@ async function handleShowTabFlow(): Promise<void> {
       return;
     }
 
-    // Send to content script
-    await sendMessageWithRetry(activeTab.id, {
-      action: "showTabFlow",
-      tabs: tabsData,
-      groups: groupsData,
-      activeTabId: activeTab.id,
-    });
+    let delivered = false;
+    try {
+      delivered = await sendMessageWithRetry(activeTab.id, {
+        action: "showTabFlow",
+        tabs: tabsData,
+        groups: groupsData,
+        activeTabId: activeTab.id,
+      });
+    } catch (error) {
+      console.error("[ERROR] Failed to send Tab Flow message:", error);
+    }
 
-    // Record performance
+    if (!delivered) {
+      console.warn(
+        "[INJECT] Content script unavailable. Overlay could not be shown."
+      );
+      return;
+    }
+
     const duration = performance.now() - startTime;
     perfMetrics.recordOverlayOpen(duration);
   } catch (error) {
@@ -656,14 +695,25 @@ async function handleQuickSwitch(): Promise<void> {
       return;
     }
 
-    // Send to content script with quickSwitch flag
-    await sendMessageWithRetry(activeTab.id, {
-      action: "showQuickSwitch",
-      tabs: tabsData,
-      activeTabId: activeTab.id,
-    });
+    let delivered = false;
+    try {
+      delivered = await sendMessageWithRetry(activeTab.id, {
+        action: "showQuickSwitch",
+        tabs: tabsData,
+        activeTabId: activeTab.id,
+      });
+    } catch (error) {
+      console.error("[ERROR] Failed to send Quick Switch message:", error);
+    }
 
-    console.log("[QUICK SWITCH] Quick switch overlay triggered");
+    if (!delivered) {
+      console.warn(
+        "[INJECT] Content script unavailable. Overlay could not be shown."
+      );
+      return;
+    }
+
+    log("[QUICK SWITCH] Quick switch overlay triggered");
   } catch (error) {
     console.error("[ERROR] Failed to show quick switch:", error);
   }

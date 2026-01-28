@@ -1,6 +1,6 @@
 {
   "../../../@crx/manifest": {
-    "file": "assets/crx-manifest.js-BgXUKrG0.js",
+    "file": "assets/crx-manifest.js-B46NgUsk.js",
     "name": "crx-manifest.js",
     "src": "../../../@crx/manifest",
     "isEntry": true
@@ -10,19 +10,19 @@
     "name": "modulepreload-polyfill"
   },
   "src/background/index.ts": {
-    "file": "assets/index.ts-DzAUW80L.js",
+    "file": "assets/index.ts-dEbvsUNi.js",
     "name": "index.ts",
     "src": "src/background/index.ts",
     "isEntry": true
   },
   "src/content/index.ts": {
-    "file": "assets/index.ts-CI2euI8W.js",
+    "file": "assets/index.ts-DtJt53bk.js",
     "name": "index.ts",
     "src": "src/content/index.ts",
     "isEntry": true
   },
   "src/flow/index.html": {
-    "file": "assets/Flow-NLChxNZM.js",
+    "file": "assets/Flow-jP71YrT3.js",
     "name": "Flow",
     "src": "src/flow/index.html",
     "isEntry": true,
@@ -31,6 +31,18 @@
     ],
     "css": [
       "assets/Flow-zpErlOf9.css"
+    ]
+  },
+  "src/options/options.html": {
+    "file": "assets/Options-4e_MPUEA.js",
+    "name": "Options",
+    "src": "src/options/options.html",
+    "isEntry": true,
+    "imports": [
+      "_modulepreload-polyfill-B5Qt9EMX.js"
+    ],
+    "css": [
+      "assets/Options-DzJUIEhY.css"
     ]
   },
   "src/popup/popup.html": {
@@ -46,7 +58,7 @@
     ]
   },
   "src/quick-switch/index.html": {
-    "file": "assets/QuickSwitch-JX20480v.js",
+    "file": "assets/QuickSwitch-DkL3MqJK.js",
     "name": "QuickSwitch",
     "src": "src/quick-switch/index.html",
     "isEntry": true,

@@ -1,0 +1,106 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Tab Flow Settings</title>
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <main class="options" aria-labelledby="options-title">
+      <header class="options-header">
+        <div class="title-wrap">
+          <h1 id="options-title">Tab Flow Settings</h1>
+          <p class="subtitle">Control performance and default views.</p>
+        </div>
+      </header>
+
+      <section class="card" aria-labelledby="quality-title">
+        <div class="card-header">
+          <h2 id="quality-title">Quality</h2>
+          <p>Balance thumbnail clarity and memory usage.</p>
+        </div>
+        <div class="field">
+          <label for="qualityTier">Screenshot quality</label>
+          <select id="qualityTier" name="qualityTier">
+            <option value="PERFORMANCE">Performance (smallest)</option>
+            <option value="NORMAL">Normal</option>
+            <option value="HIGH">High</option>
+          </select>
+        </div>
+      </section>
+
+      <section class="card" aria-labelledby="cache-title">
+        <div class="card-header">
+          <h2 id="cache-title">Cache</h2>
+          <p>Set how many screenshots are kept in memory.</p>
+        </div>
+        <div class="field-row">
+          <div class="field">
+            <label for="cacheMaxTabs">Max cached tabs</label>
+            <input
+              id="cacheMaxTabs"
+              name="cacheMaxTabs"
+              type="number"
+              min="20"
+              max="300"
+              step="10"
+              inputmode="numeric"
+            />
+            <small>Recommended: 100</small>
+          </div>
+          <div class="field">
+            <label for="cacheMaxMB">Cache size (MB)</label>
+            <input
+              id="cacheMaxMB"
+              name="cacheMaxMB"
+              type="number"
+              min="10"
+              max="200"
+              step="5"
+              inputmode="numeric"
+            />
+            <small>Recommended: 50 MB</small>
+          </div>
+        </div>
+      </section>
+
+      <section class="card" aria-labelledby="view-title">
+        <div class="card-header">
+          <h2 id="view-title">Default View</h2>
+          <p>Choose the initial layout for each overlay.</p>
+        </div>
+        <div class="field-row">
+          <div class="field">
+            <label for="tabFlowView">Tab Flow view</label>
+            <select id="tabFlowView" name="tabFlowView">
+              <option value="grid">Grid</option>
+              <option value="list">List</option>
+            </select>
+          </div>
+          <div class="field">
+            <label for="quickSwitchView">Quick Switch view</label>
+            <select id="quickSwitchView" name="quickSwitchView">
+              <option value="grid">Grid</option>
+              <option value="list">List</option>
+            </select>
+          </div>
+        </div>
+      </section>
+
+      <footer class="actions">
+        <div class="status" id="status" role="status" aria-live="polite"></div>
+        <div class="button-row">
+          <button type="button" class="button ghost" id="resetBtn">
+            Reset to defaults
+          </button>
+          <button type="button" class="button primary" id="saveBtn">
+            Save settings
+          </button>
+        </div>
+      </footer>
+    </main>
+
+    <script type="module" src="options.ts"></script>
+  </body>
+</html>

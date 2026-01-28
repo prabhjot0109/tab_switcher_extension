@@ -8,6 +8,55 @@ import {
   shouldUseVirtualRendering,
 } from "./ui/rendering";
 
+const SVG_NS = "http://www.w3.org/2000/svg";
+
+function createIcon(pathD: string): SVGSVGElement {
+  const svg = document.createElementNS(SVG_NS, "svg");
+  svg.setAttribute("viewBox", "0 0 24 24");
+  svg.setAttribute("aria-hidden", "true");
+  const path = document.createElementNS(SVG_NS, "path");
+  path.setAttribute("d", pathD);
+  svg.appendChild(path);
+  return svg;
+}
+
+function updateToggleButton(
+  btnElement: HTMLElement,
+  {
+    title,
+    pressed,
+    iconPath,
+  }: { title: string; pressed: boolean; iconPath: string }
+) {
+  btnElement.setAttribute("aria-label", title);
+  btnElement.setAttribute("aria-pressed", String(pressed));
+  btnElement.setAttribute("title", title);
+  btnElement.replaceChildren(createIcon(iconPath));
+}
+
+function createKbd(text: string): HTMLElement {
+  const kbd = document.createElement("kbd");
+  kbd.textContent = text;
+  return kbd;
+}
+
+function renderHelpText(
+  helpText: HTMLElement | undefined,
+  items: Array<{ keys: string[]; action: string }>
+) {
+  if (!helpText) return;
+  helpText.replaceChildren();
+  items.forEach((item) => {
+    const span = document.createElement("span");
+    item.keys.forEach((key) => {
+      span.appendChild(createKbd(key));
+      span.appendChild(document.createTextNode(" "));
+    });
+    span.appendChild(document.createTextNode(item.action));
+    helpText.appendChild(span);
+  });
+}
+
 export function closeOverlay() {
   try {
     if (!state.isOverlayVisible) return;
@@ -277,20 +326,26 @@ export function toggleMute(tabId: number, btnElement: HTMLElement) {
         return;
       }
 
-      if (response && response.success) {
-        const isMuted = response.muted;
+        if (response && response.success) {
+          const isMuted = response.muted;
 
-        if (isMuted) {
-          btnElement.classList.add("muted");
-          btnElement.title = "Unmute tab";
-          btnElement.innerHTML =
-            '<svg viewBox="0 0 24 24"><path d="M16.5 12c0-1.77-1.02-3.29-2.5-4.03v2.21l2.45 2.45c.03-.2.05-.41.05-.63zm2.5 0c0 .94-.2 1.82-.54 2.64l1.51 1.51C20.63 14.91 21 13.5 21 12c0-4.28-2.99-7.86-7-8.77v2.06c2.89.86 5 3.54 5 6.71zM4.27 3L3 4.27 7.73 9H3v6h4l5 5v-6.73l4.25 4.25c-.67.52-1.42.93-2.25 1.18v2.06c1.38-.31 2.63-.95 3.69-1.81L19.73 21 21 19.73 4.27 3zM12 4L9.91 6.09 12 8.18V4z"/></svg>';
-        } else {
-          btnElement.classList.remove("muted");
-          btnElement.title = "Mute tab";
-          btnElement.innerHTML =
-            '<svg viewBox="0 0 24 24"><path d="M3 9v6h4l5 5V4L7 9H3zm13.5 3c0-1.77-1.02-3.29-2.5-4.03v8.05c1.48-.73 2.5-2.25 2.5-4.02zM14 3.23v2.06c2.89.86 5 3.54 5 6.71s-2.11 5.85-5 6.71v2.06c4.01-.91 7-4.49 7-8.77s-2.99-7.86-7-8.77z"/></svg>';
-        }
+          if (isMuted) {
+            btnElement.classList.add("muted");
+            updateToggleButton(btnElement, {
+              title: "Unmute tab",
+              pressed: true,
+              iconPath:
+                "M16.5 12c0-1.77-1.02-3.29-2.5-4.03v2.21l2.45 2.45c.03-.2.05-.41.05-.63zm2.5 0c0 .94-.2 1.82-.54 2.64l1.51 1.51C20.63 14.91 21 13.5 21 12c0-4.28-2.99-7.86-7-8.77v2.06c2.89.86 5 3.54 5 6.71zM4.27 3L3 4.27 7.73 9H3v6h4l5 5v-6.73l4.25 4.25c-.67.52-1.42.93-2.25 1.18v2.06c1.38-.31 2.63-.95 3.69-1.81L19.73 21 21 19.73 4.27 3zM12 4L9.91 6.09 12 8.18V4z",
+            });
+          } else {
+            btnElement.classList.remove("muted");
+            updateToggleButton(btnElement, {
+              title: "Mute tab",
+              pressed: false,
+              iconPath:
+                "M3 9v6h4l5 5V4L7 9H3zm13.5 3c0-1.77-1.02-3.29-2.5-4.03v8.05c1.48-.73 2.5-2.25 2.5-4.02zM14 3.23v2.06c2.89.86 5 3.54 5 6.71s-2.11 5.85-5 6.71v2.06c4.01-.91 7-4.49 7-8.77s-2.99-7.86-7-8.77z",
+            });
+          }
 
         const tab = state.currentTabs.find((t) => t.id === tabId);
         if (tab) {
@@ -324,14 +379,18 @@ export function togglePlayPause(tabId: number, btnElement: HTMLElement) {
 
           if (isPlaying) {
             btnElement.classList.add("playing");
-            btnElement.title = "Pause tab";
-            btnElement.innerHTML =
-              '<svg viewBox="0 0 24 24"><path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"/></svg>';
+            updateToggleButton(btnElement, {
+              title: "Pause tab",
+              pressed: true,
+              iconPath: "M6 19h4V5H6v14zm8-14v14h4V5h-4z",
+            });
           } else {
             btnElement.classList.remove("playing");
-            btnElement.title = "Play tab";
-            btnElement.innerHTML =
-              '<svg viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>';
+            updateToggleButton(btnElement, {
+              title: "Play tab",
+              pressed: false,
+              iconPath: "M8 5v14l11-7z",
+            });
           }
 
           const tab = state.currentTabs.find((t) => t.id === tabId);
@@ -370,21 +429,21 @@ export function setViewMode(mode: "active" | "recent") {
 
   if (state.domCache?.helpText) {
     if (mode === "recent") {
-      state.domCache.helpText.innerHTML = `
-        <span><kbd>Alt+W</kbd> <kbd>↑↓</kbd> Navigate</span>
-        <span><kbd>Enter</kbd> Restore</span>
-        <span><kbd>Backspace</kbd> Active Tabs</span>
-        <span><kbd>Esc</kbd> Exit</span>
-      `;
+      renderHelpText(state.domCache.helpText, [
+        { keys: ["Alt+W", "↑↓"], action: "Navigate" },
+        { keys: ["Enter"], action: "Restore" },
+        { keys: ["Backspace"], action: "Active Tabs" },
+        { keys: ["Esc"], action: "Exit" },
+      ]);
     } else {
-      state.domCache.helpText.innerHTML = `
-        <span><kbd>Alt+W</kbd> <kbd>↑↓</kbd> Navigate</span>
-        <span><kbd>Enter</kbd> Switch Tab</span>
-        <span><kbd>Delete</kbd> Close</span>
-        <span><kbd>.</kbd> Recent Tabs</span>
-        <span><kbd>;</kbd> Tab History</span>
-        <span><kbd>Esc</kbd> Exit</span>
-      `;
+      renderHelpText(state.domCache.helpText, [
+        { keys: ["Alt+W", "↑↓"], action: "Navigate" },
+        { keys: ["Enter"], action: "Switch Tab" },
+        { keys: ["Delete"], action: "Close" },
+        { keys: ["."], action: "Recent Tabs" },
+        { keys: [";"], action: "Tab History" },
+        { keys: ["Esc"], action: "Exit" },
+      ]);
     }
   }
 }

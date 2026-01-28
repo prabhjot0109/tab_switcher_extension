@@ -29,6 +29,96 @@ const log = (...args: unknown[]) => {
   }
 };
 
+const SVG_NS = "http://www.w3.org/2000/svg";
+
+function createSvgElement(tag: string): SVGElement {
+  return document.createElementNS(SVG_NS, tag);
+}
+
+function createGridIcon(size?: number): SVGSVGElement {
+  const svg = createSvgElement("svg") as SVGSVGElement;
+  svg.setAttribute("viewBox", "0 0 24 24");
+  svg.setAttribute("fill", "none");
+  svg.setAttribute("stroke", "currentColor");
+  svg.setAttribute("stroke-width", "2");
+  svg.setAttribute("stroke-linecap", "round");
+  svg.setAttribute("stroke-linejoin", "round");
+  if (size) {
+    svg.setAttribute("width", String(size));
+    svg.setAttribute("height", String(size));
+  }
+
+  const rects = [
+    { x: "3", y: "3" },
+    { x: "14", y: "3" },
+    { x: "3", y: "14" },
+    { x: "14", y: "14" },
+  ];
+
+  rects.forEach(({ x, y }) => {
+    const rect = createSvgElement("rect");
+    rect.setAttribute("x", x);
+    rect.setAttribute("y", y);
+    rect.setAttribute("width", "7");
+    rect.setAttribute("height", "7");
+    rect.setAttribute("rx", "1");
+    svg.appendChild(rect);
+  });
+
+  return svg;
+}
+
+function createListIcon(): SVGSVGElement {
+  const svg = createSvgElement("svg") as SVGSVGElement;
+  svg.setAttribute("viewBox", "0 0 24 24");
+  svg.setAttribute("fill", "none");
+  svg.setAttribute("stroke", "currentColor");
+  svg.setAttribute("stroke-width", "2");
+
+  const lines = [
+    { y: "6" },
+    { y: "12" },
+    { y: "18" },
+  ];
+  lines.forEach(({ y }) => {
+    const line = createSvgElement("line");
+    line.setAttribute("x1", "3");
+    line.setAttribute("x2", "21");
+    line.setAttribute("y1", y);
+    line.setAttribute("y2", y);
+    svg.appendChild(line);
+  });
+
+  return svg;
+}
+
+function createKbd(text: string): HTMLElement {
+  const kbd = document.createElement("kbd");
+  kbd.textContent = text;
+  return kbd;
+}
+
+function getFaviconUrl(url?: string, size = 32): string | null {
+  if (!url) return null;
+  try {
+    const favUrl = new URL(chrome.runtime.getURL("/_favicon/"));
+    favUrl.searchParams.set("pageUrl", url);
+    favUrl.searchParams.set("size", String(size));
+    return favUrl.toString();
+  } catch {
+    return null;
+  }
+}
+
+function createFocusGuard(onFocus: () => void): HTMLElement {
+  const guard = document.createElement("span");
+  guard.className = "tab-flow-focus-guard";
+  guard.tabIndex = 0;
+  guard.setAttribute("aria-hidden", "true");
+  guard.addEventListener("focus", onFocus);
+  return guard;
+}
+
 // ============================================================================
 // GLOBAL VIEW MODE (persisted via chrome.storage.local, applies across all sites)
 // ============================================================================
@@ -46,6 +136,21 @@ try {
   });
 } catch {
   // Ignore - use default
+}
+
+try {
+  chrome.storage.onChanged.addListener((changes, areaName) => {
+    if (areaName !== "local") return;
+    const updated = changes.TabFlowViewMode?.newValue as
+      | "grid"
+      | "list"
+      | undefined;
+    if (updated === "grid" || updated === "list") {
+      cachedViewMode = updated;
+    }
+  });
+} catch {
+  // Ignore - storage events may be unavailable in some contexts.
 }
 
 /** Get the current globally cached view mode (synchronous) */
@@ -227,6 +332,8 @@ export function createOverlay() {
   const container = document.createElement("div");
   container.className = "tab-flow-container";
   container.style.transform = "translate3d(0, 0, 0)"; // GPU acceleration
+  container.setAttribute("role", "dialog");
+  container.setAttribute("aria-modal", "true");
 
   // Search + actions row
   const searchRow = document.createElement("div");
@@ -241,21 +348,20 @@ export function createOverlay() {
   searchBox.className = "tab-flow-search";
   searchBox.placeholder = "Search tabs by title or URL...";
   searchBox.autocomplete = "off";
+  searchBox.setAttribute("aria-label", "Search tabs");
 
   // Logo icon instead of search icon (Tab Flow logo)
   const searchIcon = document.createElement("div");
   searchIcon.className = "search-icon";
-  searchIcon.innerHTML = `<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-    <rect x="3" y="3" width="7" height="7" rx="1"></rect>
-    <rect x="14" y="3" width="7" height="7" rx="1"></rect>
-    <rect x="3" y="14" width="7" height="7" rx="1"></rect>
-    <rect x="14" y="14" width="7" height="7" rx="1"></rect>
-  </svg>`;
+  searchIcon.appendChild(createGridIcon(22));
 
   // Tab hint on right side of search bar (Raycast style)
   const tabHint = document.createElement("div");
   tabHint.className = "search-tab-hint";
-  tabHint.innerHTML = `<kbd>Tab</kbd> Search Google`;
+  tabHint.id = "tab-flow-search-hint";
+  tabHint.appendChild(createKbd("Tab"));
+  tabHint.appendChild(document.createTextNode(" Search Google"));
+  searchBox.setAttribute("aria-describedby", tabHint.id);
 
   searchWrap.appendChild(searchIcon);
   searchWrap.appendChild(searchBox);
@@ -270,6 +376,7 @@ export function createOverlay() {
   const sectionTitle = document.createElement("span");
   sectionTitle.className = "tab-flow-section-title";
   sectionTitle.textContent = "Opened Tabs";
+  sectionTitle.id = "tab-flow-title";
 
   const viewToggle = document.createElement("div");
   viewToggle.className = "tab-flow-view-toggle";
@@ -284,12 +391,9 @@ export function createOverlay() {
   }`;
   gridViewBtn.dataset.view = "grid";
   gridViewBtn.title = "Grid View";
-  gridViewBtn.innerHTML = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-    <rect x="3" y="3" width="7" height="7" rx="1"></rect>
-    <rect x="14" y="3" width="7" height="7" rx="1"></rect>
-    <rect x="3" y="14" width="7" height="7" rx="1"></rect>
-    <rect x="14" y="14" width="7" height="7" rx="1"></rect>
-  </svg>`;
+  gridViewBtn.setAttribute("aria-label", "Grid view");
+  gridViewBtn.setAttribute("aria-pressed", String(currentView === "grid"));
+  gridViewBtn.appendChild(createGridIcon());
 
   const listViewBtn = document.createElement("button");
   listViewBtn.type = "button";
@@ -298,11 +402,9 @@ export function createOverlay() {
   }`;
   listViewBtn.dataset.view = "list";
   listViewBtn.title = "List View";
-  listViewBtn.innerHTML = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-    <line x1="3" y1="6" x2="21" y2="6"></line>
-    <line x1="3" y1="12" x2="21" y2="12"></line>
-    <line x1="3" y1="18" x2="21" y2="18"></line>
-  </svg>`;
+  listViewBtn.setAttribute("aria-label", "List view");
+  listViewBtn.setAttribute("aria-pressed", String(currentView === "list"));
+  listViewBtn.appendChild(createListIcon());
 
   viewToggle.appendChild(gridViewBtn);
   viewToggle.appendChild(listViewBtn);
@@ -323,15 +425,18 @@ export function createOverlay() {
   // Help text - Raycast-style action bar (centered)
   const helpText = document.createElement("div");
   helpText.className = "tab-flow-help";
-  helpText.innerHTML = `
-      <span><kbd>Alt+W</kbd> <kbd>↑↓</kbd> Navigate</span>
-     <span><kbd>↵</kbd>Switch</span>
-     <span><kbd>Del</kbd>Close</span>
-     <span><kbd>.</kbd>Recent</span>
-     <span><kbd>;</kbd>History</span>
-     <span><kbd>Esc</kbd>Exit</span>
-   `;
+  helpText.id = "tab-flow-help";
+  helpText.setAttribute("aria-live", "polite");
+  helpText.setAttribute("aria-atomic", "true");
   container.appendChild(helpText);
+
+  container.setAttribute("aria-labelledby", sectionTitle.id);
+  container.setAttribute("aria-describedby", helpText.id);
+
+  const focusStart = createFocusGuard(() => searchBox.focus());
+  const focusEnd = createFocusGuard(() => searchBox.focus());
+  container.prepend(focusStart);
+  container.appendChild(focusEnd);
 
   overlay.appendChild(container);
 
@@ -357,6 +462,8 @@ export function createOverlay() {
     // Update button states
     gridViewBtn.classList.toggle("active", view === "grid");
     listViewBtn.classList.toggle("active", view === "list");
+    gridViewBtn.setAttribute("aria-pressed", String(view === "grid"));
+    listViewBtn.setAttribute("aria-pressed", String(view === "list"));
 
     // Update grid class
     grid.classList.toggle("list-view", view === "list");
@@ -379,9 +486,7 @@ export function createOverlay() {
 
   shadowRoot.appendChild(overlay);
 
-  console.log(
-    "[PERF] Overlay created with GPU acceleration and event delegation"
-  );
+  log("[PERF] Overlay created with GPU acceleration and event delegation");
 }
 
 export function showTabFlow(
@@ -391,9 +496,7 @@ export function showTabFlow(
 ) {
   const startTime = performance.now();
 
-  console.log(
-    `[Tab Flow] Opening with ${tabs.length} tabs and ${groups.length} groups`
-  );
+  log(`[Tab Flow] Opening with ${tabs.length} tabs and ${groups.length} groups`);
 
   // Capture fullscreen element before showing overlay
   const d: any = document as any;
@@ -621,10 +724,20 @@ function updateQuickSwitchViewUI() {
   // Update toggle buttons
   const gridBtn = quickSwitchOverlay.querySelector('[data-view="grid"]');
   const listBtn = quickSwitchOverlay.querySelector('[data-view="list"]');
-  if (gridBtn)
+  if (gridBtn) {
     gridBtn.classList.toggle("active", cachedQuickSwitchViewMode === "grid");
-  if (listBtn)
+    gridBtn.setAttribute(
+      "aria-pressed",
+      String(cachedQuickSwitchViewMode === "grid")
+    );
+  }
+  if (listBtn) {
     listBtn.classList.toggle("active", cachedQuickSwitchViewMode === "list");
+    listBtn.setAttribute(
+      "aria-pressed",
+      String(cachedQuickSwitchViewMode === "list")
+    );
+  }
 }
 
 function createQuickSwitchOverlay() {
@@ -648,6 +761,8 @@ function createQuickSwitchOverlay() {
   const container = document.createElement("div");
   container.className = "tab-flow-container quick-switch-container";
   container.style.transform = "translate3d(0, 0, 0)";
+  container.setAttribute("role", "dialog");
+  container.setAttribute("aria-modal", "true");
 
   // Section header with title and view toggle
   const sectionHeader = document.createElement("div");
@@ -656,6 +771,7 @@ function createQuickSwitchOverlay() {
   const sectionTitle = document.createElement("span");
   sectionTitle.className = "tab-flow-section-title";
   sectionTitle.textContent = "Switch Tabs";
+  sectionTitle.id = "quick-switch-title";
 
   // View toggle
   const viewToggle = document.createElement("div");
@@ -668,12 +784,12 @@ function createQuickSwitchOverlay() {
   }`;
   gridViewBtn.dataset.view = "grid";
   gridViewBtn.title = "Grid View";
-  gridViewBtn.innerHTML = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-    <rect x="3" y="3" width="7" height="7" rx="1"></rect>
-    <rect x="14" y="3" width="7" height="7" rx="1"></rect>
-    <rect x="3" y="14" width="7" height="7" rx="1"></rect>
-    <rect x="14" y="14" width="7" height="7" rx="1"></rect>
-  </svg>`;
+  gridViewBtn.setAttribute("aria-label", "Grid view");
+  gridViewBtn.setAttribute(
+    "aria-pressed",
+    String(cachedQuickSwitchViewMode === "grid")
+  );
+  gridViewBtn.appendChild(createGridIcon());
 
   const listViewBtn = document.createElement("button");
   listViewBtn.type = "button";
@@ -682,11 +798,12 @@ function createQuickSwitchOverlay() {
   }`;
   listViewBtn.dataset.view = "list";
   listViewBtn.title = "List View";
-  listViewBtn.innerHTML = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-    <line x1="3" y1="6" x2="21" y2="6"></line>
-    <line x1="3" y1="12" x2="21" y2="12"></line>
-    <line x1="3" y1="18" x2="21" y2="18"></line>
-  </svg>`;
+  listViewBtn.setAttribute("aria-label", "List view");
+  listViewBtn.setAttribute(
+    "aria-pressed",
+    String(cachedQuickSwitchViewMode === "list")
+  );
+  listViewBtn.appendChild(createListIcon());
 
   viewToggle.appendChild(gridViewBtn);
   viewToggle.appendChild(listViewBtn);
@@ -703,19 +820,39 @@ function createQuickSwitchOverlay() {
   grid.id = "quick-switch-grid";
   grid.setAttribute("role", "listbox");
   grid.setAttribute("aria-label", "Quick switch tabs");
+  grid.tabIndex = 0;
   grid.style.transform = "translate3d(0, 0, 0)";
   container.appendChild(grid);
 
   // Help text
   const helpText = document.createElement("div");
   helpText.className = "tab-flow-help";
-  helpText.innerHTML = `
-    <span><kbd>Alt+Q</kbd> Cycle</span>
-    <span><kbd>↑↓</kbd> Navigate</span>
-    <span>Release <kbd>Alt</kbd> to Switch</span>
-    <span><kbd>Esc</kbd> Cancel</span>
-  `;
+  helpText.id = "quick-switch-help";
+  helpText.setAttribute("aria-live", "polite");
+  helpText.setAttribute("aria-atomic", "true");
+  const quickSwitchHelp = [
+    { keys: ["Alt+Q"], action: "Cycle" },
+    { keys: ["↑↓"], action: "Navigate" },
+    { keys: ["Alt"], action: "Release to Switch" },
+    { keys: ["Esc"], action: "Cancel" },
+  ];
+  quickSwitchHelp.forEach((item) => {
+    const span = document.createElement("span");
+    item.keys.forEach((key) => {
+      span.appendChild(createKbd(key));
+      span.appendChild(document.createTextNode(" "));
+    });
+    span.appendChild(document.createTextNode(item.action));
+    helpText.appendChild(span);
+  });
   container.appendChild(helpText);
+
+  container.setAttribute("aria-labelledby", sectionTitle.id);
+  container.setAttribute("aria-describedby", helpText.id);
+  const focusStart = createFocusGuard(() => grid.focus());
+  const focusEnd = createFocusGuard(() => grid.focus());
+  container.prepend(focusStart);
+  container.appendChild(focusEnd);
 
   overlay.appendChild(container);
 
@@ -741,6 +878,8 @@ function createQuickSwitchOverlay() {
     // Update button states
     gridViewBtn.classList.toggle("active", view === "grid");
     listViewBtn.classList.toggle("active", view === "list");
+    gridViewBtn.setAttribute("aria-pressed", String(view === "grid"));
+    listViewBtn.setAttribute("aria-pressed", String(view === "list"));
 
     // Update grid class
     grid.classList.toggle("list-view", view === "list");
@@ -786,7 +925,7 @@ function renderQuickSwitchTabs(tabs: Tab[]) {
 
     const faviconLarge = document.createElement("img");
     faviconLarge.className = "favicon-large";
-    faviconLarge.src = tab.favIconUrl || `chrome://favicon/${tab.url}`;
+    faviconLarge.src = tab.favIconUrl || getFaviconUrl(tab.url) || "";
     faviconLarge.alt = "";
     faviconLarge.onerror = () => {
       faviconLarge.style.display = "none";

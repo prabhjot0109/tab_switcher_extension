@@ -104,6 +104,15 @@
   overscroll-behavior: contain;
 }
 
+.tab-flow-focus-guard {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+  left: -10000px;
+  top: auto;
+}
+
 .tab-flow-backdrop {
   position: absolute;
   inset: 0;

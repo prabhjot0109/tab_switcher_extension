@@ -31,6 +31,20 @@ export class LRUCache {
     this.ready = this._restoreFromStorage();
   }
 
+  resize(maxTabs: number, maxBytes: number): void {
+    const normalizedTabs = Math.max(1, Math.floor(maxTabs));
+    const normalizedBytes = Math.max(1, Math.floor(maxBytes));
+    this.maxTabs = normalizedTabs;
+    this.maxBytes = normalizedBytes;
+
+    while (
+      (this.cache.size > this.maxTabs || this.currentBytes > this.maxBytes) &&
+      this.cache.size > 0
+    ) {
+      this._evictLRU();
+    }
+  }
+
   // Restore cache from IndexedDB on startup
   private async _restoreFromStorage(): Promise<void> {
     try {
