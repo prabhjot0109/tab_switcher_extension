@@ -331,6 +331,9 @@ function renderTabs() {
 
     const faviconLarge = document.createElement("img");
     faviconLarge.className = "favicon-large";
+    faviconLarge.loading = "eager";
+    faviconLarge.decoding = "async";
+    faviconLarge.setAttribute("fetchpriority", "high");
     faviconLarge.src =
       tab.favIconUrl || getFaviconUrl(tab.url) || "";
     faviconLarge.alt = "";

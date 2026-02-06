@@ -236,9 +236,14 @@ export async function handleMessage(
           return;
         }
         try {
+          const forceQuality =
+            typeof request.forceQuality === "string"
+              ? request.forceQuality
+              : null;
           const capturedScreenshot = await screenshot.captureTabScreenshot(
             request.tabId,
-            screenshotCache
+            screenshotCache,
+            forceQuality
           );
           sendResponse({
             success: !!capturedScreenshot,

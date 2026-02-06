@@ -132,6 +132,13 @@ async function downscaleScreenshot(
       return dataUrl;
     }
 
+    ctx.imageSmoothingEnabled = true;
+    try {
+      (ctx as any).imageSmoothingQuality = "high";
+    } catch {
+      // Ignore if unsupported.
+    }
+
     ctx.drawImage(bitmap, 0, 0, target.width, target.height);
     bitmap.close?.();
 
